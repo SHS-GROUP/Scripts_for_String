@@ -1,0 +1,23 @@
+#!/bin/bash
+#SBATCH --job-name="qmmm_string_fIIIII"
+#SBATCH --output="qmmm_string_fIIIII.out"
+#SBATCH -t 30:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=8
+#SBATCH -e qmmm_string_fIIIII.err
+#SBATCH --partition=shared
+#SBATCH --export=ALL
+
+module purge
+export QCMACHINEFILE=`generate_pbs_nodefile`
+module load qchem/4.4
+module load gnu/4.9.2
+
+sander=/oasis/projects/nsf/uic317/pfliuiuc/Software/amber16/bin/sander
+
+top=TOPTOP
+step=SSSSS
+wind=IIIII
+export OMP_NUM_THREADS=8
+$sander -O -i qmmm_string.in -o qmmm_string.out -p ${top}.prmtop  -c ${step}_initial_f${wind}.rst -r ${step}_last_f${wind}.rst -x qmmm_string_${step}_f${wind}.netcdf
+

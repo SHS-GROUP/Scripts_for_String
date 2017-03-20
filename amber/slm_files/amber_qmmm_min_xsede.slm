@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --job-name="qmmm_min_react"
+#SBATCH --output="qmmm_min_react.out"
+#SBATCH -t 30:00:00
+#SBATCH --partition=shared
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=12
+#SBATCH -e qmmm_min_react.err
+#SBATCH --export=ALL
+
+module purge
+export QCMACHINEFILE=`generate_pbs_nodefile`
+module load qchem/4.4
+module load gnu/4.9.2
+
+sander=/oasis/projects/nsf/uic317/pfliuiuc/Software/amber16/bin/sander
+
+top=pre_react
+export OMP_NUM_THREADS=12
+$sander -O -i qmmm_qmmin.in -o qmmm_qmmin.out -p ${top}.prmtop  -c ${top}.rst -r ${top}_min.rst -x ${top}_min.netcdf
+

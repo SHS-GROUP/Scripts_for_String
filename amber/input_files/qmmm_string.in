@@ -1,0 +1,31 @@
+NPT equilibrium 2ns
+ &cntrl
+   imin=0, irest=0, ntx=1,
+   nstlim=5, dt=0.001, 
+   ntpr=1, ntwx=1, ntwr=1,
+   cut=999.0, ntb=0,
+   ntc=2, ntf=2, ntt=2,
+   tempi=300.0, temp0=300.0, 
+   ioutfm=1, ntwv=-1, ig=-1, ntxo=1,
+   ifqnt=1, nmropt=1,
+   ibelly=1, bellymask=":FE1<:18.0",
+/
+ &qmmm
+   qmmask="@7786-7796,7874-7884,10887-10897,10940-10947,13253-13328",
+   qmshake=0,
+   qmcut=999.0,
+   qmcharge=0,
+   spin=6,
+   writepdb=1,
+   qm_theory = 'EXTERN',
+   qm_ewald = 0,
+/
+ &qc
+   num_threads=8,
+   use_template = 1,
+/
+ &wt type="DUMPFREQ", istep1=1 /
+ &wt type="END", /
+ DISANG=IIIII.RST
+ DUMPAVE=IIIII.log
+/

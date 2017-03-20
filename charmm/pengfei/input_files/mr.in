@@ -1,0 +1,50 @@
+* add H to PDB file
+*
+prnlev 5
+wrnlev 8
+!bomlev -2
+
+! read topology and parameter files
+
+read rtf card name "/home/pengfeil/Projs/String_test/4-mastro/david/parm14sb_mr.rtf" unit 1
+read para card name "/home/pengfeil/Projs/String_test/4-mastro/david/parm14sb_mr.prm" unit 1
+
+open unit 1 card read name "mr_fix.pdb"
+read sequ pdb unit 1
+close unit 1
+!gener A ADE5 none last URA3 
+!gener A first none last URA3
+!gener A first NGLY last CSER
+gener A first none last none
+
+! Read mrein coord from the PDB coordinate file
+open unit 1 card read name "mr_fix.pdb"
+read coor pdb unit 1
+close unit 1
+
+print coor
+
+ic para
+ic fill preserve
+ic build
+!hbuild sele all end
+
+!coor print
+
+! write out the mrein structure file (psf) and
+! the coordinate file in pdb and crd format.
+
+write psf card name mr.psf unit 1
+* PSF
+*
+
+write coor pdb name mr.new.pdb unit 1
+* PDB Coords
+*
+
+write coor card name mr.crd unit 1
+* Coords
+*
+
+stop
+

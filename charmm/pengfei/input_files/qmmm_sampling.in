@@ -1,0 +1,99 @@
+* CHARMM / Q-Chem 
+*
+prnlev 5
+wrnlev 8
+!bomlev -2
+
+! read topology and parameter files
+
+read rtf card name "/oasis/projects/nsf/uic317/pfliuiuc/Projs/String_test/4-mastro/react/david/parm14sb_mr.rtf" unit 1
+read para card name "/oasis/projects/nsf/uic317/pfliuiuc/Projs/String_test/4-mastro/react/david/parm14sb_mr.prm" unit 1
+
+read psf card name react_link.psf unit 1
+read coor card name SSSSS_initial.crd unit 1
+
+!---------define atoms in QM region----------------------------
+define qm select atom A 1 C1 .or. atom A 1 H1 .or. atom A 1 C2 .or. atom A 1 H2 -
+                             .or. atom A 1 C3 .or. atom A 1 H3 .or. atom A 1 O1 -
+                             .or. atom A 1 O2 .or. atom A 1 H4 show end
+
+define qmregion sele qm show end
+
+!---------- Needed to define Q-Chem env. vars. ----------
+ envi qchemcnt  "qchem.in"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "qchem"
+ envi qchemout  "qchem.out"
+!--------------------------------------------------------
+
+!---------- Freeze atoms lying outside 18A from scissile phosphate-----------
+define core select (atom A 1 C1) show end
+define core9a select (.byres. (core .around. 9.0)) show end
+define out9a select (.not. core9a) show end
+cons fix select out9a end
+!----------------------------------------------------------------------------
+
+!---------- Nonbond interactions -------------------------------------------
+NBONd   elec atom cdie eps 1.0 shift -
+       vdw vatom vdis wmin 1.0 vswitch -
+       CUTNb  40.0  CTONnb  11.0  CTOFnb  12.0
+!--------------------------------------------------------------------------
+
+!------------------------QMMM dynamics------------------------------------
+
+!-----------------------activate qchem------------------------------------
+qchem omp para 24 NOGU remove exgroup sele qmregion end
+!-------------------------------------------------------------------------
+stream val.stream
+stream constr.stream
+
+PRINT RESDistances    ! print a check of distances
+
+open write card unit 51 name SSSSS_production.rst
+open write file unit 52 name SSSSS_production.dcd
+open write file unit 53 name SSSSS_production.vel
+open write card unit 54 name SSSSS_production.ene
+
+!-------------run dynamics----------------------------
+
+set STEP 100
+SCALAR FBETA SET 8.0 select all end
+dynamics lang leap start -
+         timestep 0.001       - ! timestep in picoseconds
+         nstep @STEP          - ! number of steps and energy evaluations
+         nprint 1             - ! step frequency for writing in kunit and pr energy on unit 6
+         iunwri 51            - ! unit to write restart file
+         iunrea 55            - ! unit to read restart file
+         iuncrd 52            - ! unit to write coordinates (unformatted)
+         iunvel 53            - ! unit to write velocities out to
+         kunit 54             - ! unit to write energy and temp inforamtion out to file
+         iprfrq 20            - ! frequency for avg and rms energy
+         firstt 300.          - ! initial T for velocity assignments
+         tstruc 300.          - ! initial T for velocity assignments
+         finalt 300.          - ! final T
+         tbath 300.           - ! temperature of heat bath
+         iasors 1             - ! asgn (NOT scale) veldur heat/equil (.ne. 0 = asgn; .eq. 0 = scale)
+         iasvel 1             - ! use gaussian distrib of vel (.gt. 0 = gaussian ; .lt. 0 = uniform)
+         nsavc 1              - ! freq for writing coordinates
+         nsavv 0              - ! freq for writing velocities
+         isvfrq @STEP         - ! frequency for writing restart files
+         ihtfrq 0             - ! frequency for heating steps during the dynamics
+         ieqfrq 0             - ! frequency for scaling velocities during heating
+         inbfrq 1             - ! lists updated when necessary (heuristic test)
+         ihbfrq 0             - ! frequency for updating hydrogen bond list
+         ntrfrq 0             - ! step freq for stopping rotation and translation
+         echeck 10000000.0    - ! max variation of energy step-to-step
+         ichecw 0               ! check to see if avg. temp. lies w/ temp range (0 = do not check)
+
+!------------------------------------------------------------------
+
+PRINT RESDistances    ! print a check of distances
+
+open write form unit 14 name stepSSSSS.cor
+write coor card unit 14
+close unit 14
+
+stream getcoord.stream
+
+stop
+

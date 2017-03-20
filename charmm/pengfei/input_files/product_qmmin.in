@@ -1,0 +1,83 @@
+* QM_MM dynamics setup
+*
+prnlev 5
+wrnlev 8
+bomlev -5
+
+!--read topology and parameter files------------------------------
+
+read rtf card name "/home/pengfeil/Projs/String_test/4-mastro/react/david/parm14sb_mr.rtf" unit 1
+read para card name "/home/pengfeil/Projs/String_test/4-mastro/react/david/parm14sb_mr.prm" unit 1
+
+read psf card name combined_product.psf unit 1
+read coor card name combined_product.crd unit 1
+
+!---------define atoms in QM region----------------------------
+define qm select atom A 1 C1 .or. atom A 1 H1 .or. atom A 1 C2 .or. atom A 1 H2 -
+                             .or. atom A 1 C3 .or. atom A 1 H3 .or. atom A 1 O1 -
+                             .or. atom A 1 O2 .or. atom A 1 H4 show end
+
+define qmregion sele qm show end
+
+!---------- Needed to define Q-Chem env. vars. ----------
+ envi qchemcnt  "qchem.in"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "qchem"
+ envi qchemout  "qchem.out"
+!--------------------------------------------------------
+
+!delete atom sele (.not. qmregion) show end
+
+open write form unit 14 name product_link.psf
+write psf card unit 14
+close unit 14
+
+open write form unit 14 name product_link.crd
+write coor card unit 14
+close unit 14
+
+!stop
+
+!---------- Freeze atoms lying outside 18A from scissile phosphate-----------
+!define core select (atom MG 1 MG) show end
+!define core18a select (.byres. (core .around. 18.0)) show end
+!define out18a select (.not. core18a) show end
+define MM select (.not. qmregion) show end
+cons fix select MM end
+!cons fix select out18a end
+!----------------------------------------------------------------------------
+
+!---------- Nonbond interactions -------------------------------------------
+NBONd   elec atom cdie eps 1.0 shift -
+       vdw vatom vdis wmin 1.0 vswitch -
+       CUTNb  40.0  CTONnb  11.0  CTOFnb  12.0  ! Changing from 12 to 13.5
+!--------------------------------------------------------------------------
+
+!----------Read starting coordinates----------------------------------------
+open read form unit 15 name product_link.crd
+read coor card unit 15
+close unit 15
+!--------------------------------------------------------------------------
+
+!------------------------Restraints------------------------------------
+!stream constr.stream
+
+!-----------------------activate qchem------------------------------------
+qchem omp para 24 NOGU remove exgroup sele qmregion end
+!-------------------------------------------------------------------------
+
+SKIP NONE          !make sure all energy terms are enabled
+
+!-------------run dynamics----------------------------
+mini abnr nstep 100000 tolg 1
+
+open write form unit 17 name product_qmmin.psf
+write psf card unit 17
+close unit 17
+open write form unit 17 name product_qmmin.crd
+write coor card unit 17
+close unit 17
+
+!-----------------------------------------------------------------------------------
+stop
+

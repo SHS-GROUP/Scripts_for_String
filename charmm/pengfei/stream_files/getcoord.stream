@@ -1,0 +1,13 @@
+! Set the atom numbers of each reaction coordinate
+   QUICK  bynum 7 bynum 9
+set dist1 ?DIST
+   QUICK  bynum 8 bynum 9
+set dist2 ?DIST
+   QUICK  bynum 7 bynum 8
+set dist3 ?DIST
+
+open append unit 14 write card name "./dist.dat"
+write title unit 14
+* @dist1 
+* @dist2 
+* @dist3 

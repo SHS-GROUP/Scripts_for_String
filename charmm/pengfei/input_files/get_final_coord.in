@@ -1,0 +1,56 @@
+* add H to PDB file
+*
+prnlev 5
+wrnlev 8
+
+! read topology and parameter files
+
+read rtf card name "/oasis/projects/nsf/uic317/pfliuiuc/Projs/String_test/4-mastro/react/david/parm14sb_mr.rtf" unit 1
+read para card name "/oasis/projects/nsf/uic317/pfliuiuc/Projs/String_test/4-mastro/react/david/parm14sb_mr.prm" unit 1
+
+read psf card name react_link.psf unit 1
+read coor card name initialcoord.crd unit 1
+
+!---------define atoms in QM region----------------------------
+define qm select atom A 1 C1 .or. atom A 1 H1 .or. atom A 1 C2 .or. atom A 1 H2 -
+                             .or. atom A 1 C3 .or. atom A 1 H3 .or. atom A 1 O1 -
+                             .or. atom A 1 O2 .or. atom A 1 H4 show end
+
+define qmregion sele qm show end
+
+!---------- Needed to define Q-Chem env. vars. ----------
+ envi qchemcnt  "qchem.in"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "qchem"
+ envi qchemout  "qchem.out"
+!--------------------------------------------------------
+
+!---------------------ANALYSIS---------------------------
+
+!----------Read starting coordinates---------------------
+open read file unit 13 name trajectory.dcd
+!--------------------------------------------------------
+
+!----------Go through the trajectory frame by frame-----
+!----------loop to get the last frame-------------------
+!----------change ntot accordingly to get any particular frame---
+traj firstu 13 nunit 1 skip 1 
+
+set ntot 100
+set i 1
+label loop
+traj read
+incr i by 1
+if i .lt. ntot  goto loop
+if i .eq. ntot  goto final
+!----------------------------------------------------------------
+
+
+!------------------write out last frame-----------------
+label final
+open write card unit 16 name SSSSS_last.crd
+write coor card unit 16
+!-------------------------------------------------------
+
+stop 
+

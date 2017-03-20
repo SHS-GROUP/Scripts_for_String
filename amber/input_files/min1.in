@@ -1,0 +1,8 @@
+minimize structure solvation+ions+capped residues
+ &cntrl
+        imin=1, maxcyc=5000, ncyc=2500,
+        ntb=1, cut=12, ntwx=500, ioutfm=1, iwrap=1,
+  ntr=1, restraintmask=':1-842 & !@H=', restraint_wt=500.0,
+ /
+ &ewald
+ /

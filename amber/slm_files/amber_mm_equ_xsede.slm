@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --job-name="mm_equ_fIIIII"
+#SBATCH --tasks-per-node=1
+#SBATCH -t 30:00:00
+#SBATCH --partition=shared
+#SBATCH -o mm_equ_fIIIII.out
+#SBATCH -e mm_equ_fIIIII.err
+#SBATCH --export=ALL
+
+module purge
+module load gnu/4.9.2
+
+wind=IIIII
+top=TOPTOP
+sander=/oasis/projects/nsf/uic317/pfliuiuc/Software/amber16/bin/sander
+$sander -O -i mm_equ.in -o mm_equ.out -p ${top}.prmtop -c interpol_${wind}.inpcrd -r mm_equ_f${wind}.rst -x mm_equ_f${wind}.netcdf
+

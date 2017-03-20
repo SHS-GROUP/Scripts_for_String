@@ -1,0 +1,6 @@
+!Set up the atom numbers of each reaction coordinate
+!---------------------Restraints on distances-----------------------------
+RESDistance KVAL @F1 RVAL @V1 1.0 bynum 7 bynum 9
+RESDistance KVAL @F2 RVAL @V2 1.0 bynum 8 bynum 9
+RESDistance KVAL @F3 RVAL @V3 1.0 bynum 7 bynum 8
+

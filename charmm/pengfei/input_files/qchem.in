@@ -1,0 +1,22 @@
+$comment
+qchem control file needed for the
+force calc case
+$end
+
+$rem
+exchange              b3lyp
+basis                 6-31G**
+qm_mm                 true
+jobtype               force
+symmetry              off
+sym_ignore            true
+print_input           false
+qmmm_print            true
+SCF_CONVERGENCE       5
+MAX_SCF_CYCLES        1000
+$end
+
+$molecule
+0 1
+$end
+

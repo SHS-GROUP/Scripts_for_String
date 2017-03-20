@@ -1,0 +1,18 @@
+#!/bin/bash       
+
+#!/bin/bash       
+#SBATCH --job-name="inputfile_fIIIII"
+#SBATCH --output="inputfile_fIIIII.out"
+#SBATCH -t 48:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --no-requeue
+#SBATCH --export=ALL
+#SBATCH -e inputfile_fIIIII.err
+#SBATCH --partition=shared   #What queue to run job
+
+myname=inputfile
+#
+#
+/oasis/projects/nsf/uic317/zsx988/c40b1/exec/gnu_M/charmm < $myname.in
+

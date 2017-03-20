@@ -1,0 +1,24 @@
+* add H to PDB file
+*
+prnlev 5
+wrnlev 8
+bomlev -1
+
+! read topology and parameter files
+
+read rtf card name "/home/pengfeil/Projs/String_test/4-mastro/david/parm14sb_mr.rtf" unit 1
+read para card name "/home/pengfeil/Projs/String_test/4-mastro/david/parm14sb_mr.prm" unit 1
+
+read psf card name mr.psf unit 1
+read coor card name mr.crd unit 1
+
+read psf card name water1.psf unit 1 append
+read coor card name water1.crd unit 1 append
+
+write psf card name combine_product.psf unit 1
+write coor card name combine_product.crd unit 1
+
+!energy
+
+stop 
+

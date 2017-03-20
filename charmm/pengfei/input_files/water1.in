@@ -1,0 +1,49 @@
+* add H to PDB file
+*
+prnlev 5
+wrnlev 8
+bomlev -2
+
+! read topology and parameter files
+
+read rtf card name "/home/pengfeil/Projs/String_test/4-mastro/david/parm14sb_mr.rtf" unit 1
+read para card name "/home/pengfeil/Projs/String_test/4-mastro/david/parm14sb_mr.prm" unit 1
+
+open unit 1 card read name "water1_fix.pdb"
+read sequ pdb unit 1
+close unit 1
+!gener a first none last none
+gener wat1 noangle
+
+! Read protein coord from the PDB coordinate file
+open unit 1 card read name "water1_fix.pdb"
+read coor pdb unit 1
+close unit 1
+
+print coor
+
+ic para
+ic fill preserve
+ic build
+!hbuild sele all end
+
+!coor print
+
+! write out the protein structure file (psf) and
+! the coordinate file in pdb and crd format.
+
+write psf card name water1.psf unit 1
+* PSF
+*
+
+write coor pdb name water1.new.pdb unit 1
+* PDB Coords
+*
+
+write coor card name water1.crd unit 1
+* Coords
+*
+
+stop
+
+

@@ -1,0 +1,11 @@
+NPT equilibrium 2ns
+ &cntrl
+   imin=0, irest=0, ntx=1,
+   nstlim=100, dt=0.001, 
+   ntpr=100, ntwx=100, ntwr=100,
+   cut=999.0, ntb=0,
+   ntc=2, ntf=2, ntt=2,
+   tempi=300.0, temp0=300.0, 
+   ioutfm=1, ntwv=-1, ig=-1, ntxo=1,
+   ibelly=1, bellymask="(!@7786-7796,7874-7884,10887-10897,10940-10947,13253-13328)&(:FE1<:18.0)",
+/
