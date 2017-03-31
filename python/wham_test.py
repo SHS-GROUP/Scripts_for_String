@@ -24,14 +24,7 @@ class window_data:
         self.avg = avg_val_list
         self.std = std_val_list
 
-#About the color dictionary
-#color_dict = {1: 'b', 2: 'g',
-#              3: 'r', 4: 'c',
-#              5: 'm', 6: 'y',
-#              7: 'y', 8: 'k'}
-
 def get_color_dict(dim):
-
     color_dict = {}
     color_disc = [[0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]]
 
@@ -55,7 +48,6 @@ def get_color_dict(dim):
 
     for i in range(0, dim):
         color_dict[i+1] = color_disc[i]
-
     return color_dict
 
 def write_list(fname, list_name, num_sims):
@@ -67,7 +59,19 @@ def write_list(fname, list_name, num_sims):
             print(' ', file=writef)
     writef.close()
 
-def read_file(fname):
+def write_xy(fname, xlist, ylist):
+
+    if len(xlist) != len(ylist):
+        raise ValueError('The length of xlist and ylist should be the same!')
+
+    writef = open(fname, 'w')
+    for i in xrange(1, len(xlist)):
+        j = xlist[i]
+        k = ylist[i]
+        print("%16.3f %16.3f" %(j, k), file=writef)
+    writef.close()
+
+def read_dat_file(fname):
     readf = open(fname, 'r')
     dat_array = []
     ln = 0
@@ -80,7 +84,7 @@ def read_file(fname):
     readf.close()
     return dat_array
 
-def plot_string(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, figname):
+def plot_string_1D(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, figname):
     color_dict = get_color_dict(dim)
     x = range(1, num_imgs+1) # X axis for plotting
     for i in range(1, dim+1):
@@ -103,10 +107,10 @@ def plot_string(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, fig
     plt.xticks(x)
     plt.savefig(figname)
     plt.close()
-    #plt.show()
 
 def plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, rc_label):
 
+    # Convert the probability into free energy
     free_ene_RC = [0.0 for i in xrange(num_bins)]
     for i in xrange(num_bins):
         free_ene_RC[i] = -KbT*log(Prob_RC[i])
@@ -114,6 +118,10 @@ def plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, rc_label):
     min_free_ene = min(free_ene_RC)
     free_ene_RC = [free_ene - min_free_ene for free_ene  in free_ene_RC]
 
+    # Print out the free energy
+    write_xy(figname + '.free_energy', xaxis_RC, free_ene_RC)
+
+    # Plot out the free energy
     plt.plot(xaxis_RC, free_ene_RC, 'k-')
     plt.ylabel('Free Energy (kcal/mol)')
     plt.xlabel(rc_label)
@@ -121,7 +129,6 @@ def plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, rc_label):
     plt.close()
 
 def get_string_2D(ini_image, fin_image, rc_diml1, coefl1, rc_diml2, coefl2):
-
     crd = []
     crd1 = []
     crd2 = []
@@ -146,6 +153,7 @@ def get_string_2D(ini_image, fin_image, rc_diml1, coefl1, rc_diml2, coefl2):
 
 def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, ini_crd=[], fin_crd=[]):
 
+    # Convert the probability into free energy
     free_ene_RC12 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
     for i in xrange(num_bins1):
         for j in xrange(num_bins2):
@@ -160,7 +168,8 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
             if free_ene_RC12[i][j] > max_free_ene:
                 max_free_ene = free_ene_RC12[i][j]
 
-    w_free_ene = open(figname+'.txt', 'w')
+    # Print out the free energy
+    w_free_ene = open(figname+'.free_energy', 'w')
     for i in xrange(num_bins1):
         for j in xrange(num_bins2):
             free_ene_RC12[i][j] = round(free_ene_RC12[i][j] - min_free_ene, 3)
@@ -168,23 +177,17 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
         print('', file=w_free_ene)
     w_free_ene.close()
 
-    """
-    CS = plt.contour(xaxis_RC1, xaxis_RC2, free_ene_RC12, 6,
-         linewidths=arange(.5, 4, .5),
-         colors=('r', 'green', 'blue', (1, 1, 0), '#afeeee', '0.5'))
-    plt.clabel(CS, fontsize=9, inline=1)
-    """
-
+    # Plot out the free energy
     plt.contourf(xaxis_RC1, xaxis_RC2, free_ene_RC12, cmap='jet')
     plt.colorbar().set_label('Free Energy (kcal/mol)')
     plt.xlabel(xlabel1)
     plt.ylabel(xlabel2)
 
     if ini_crd != []:
-        plt.scatter(ini_crd[0], ini_crd[1], color='r', marker='o', linestyle='-', linewidth=2.0)
+        plt.scatter(ini_crd[0], ini_crd[1], color='r', marker='o', linewidth=2.0)
 
     if fin_crd != []:
-        plt.scatter(fin_crd[0], fin_crd[1], color='g', marker='o', linestyle='-', linewidth=2.0)
+        plt.scatter(fin_crd[0], fin_crd[1], color='g', marker='o', linewidth=2.0)
 
     plt.savefig(figname, dpi=900)
     plt.close()
@@ -221,6 +224,7 @@ def get_rc_data_1D(rc_diml, coefl, num_bins):
     plot_bins_RC = bins_RC[0:-1]
     xaxis_RC = [i + binsize_RC/2.0 for i in plot_bins_RC]
 
+    # Global binning
     color_dict = get_color_dict(num_sims)
 
     for i in xrange(0, num_sims):
@@ -231,7 +235,7 @@ def get_rc_data_1D(rc_diml, coefl, num_bins):
 
     figname = ''
     for i in xrange(0, len(rc_diml)):
-        figname = figname + str(round(coefl[i],1)) + 'RC' + str(rc_diml[i]) 
+        figname = figname + str(round(coefl[i],1)) + 'R' + str(rc_diml[i]) 
     figname = figname + 'globin.pdf'
     plt.savefig(figname)
     plt.close()
@@ -337,9 +341,9 @@ datal = []
 for i in range(1, num_iter+1):
     window_dir = './' + str(i) + '/'
     res_crdf = window_dir + 'newconstr.' + str(i) + '.dat'
-    res_crd = read_file(res_crdf)
+    res_crd = read_dat_file(res_crdf)
     res_forcef = window_dir + 'force.' + str(i) + '.dat'
-    res_force = read_file(res_forcef)
+    res_force = read_dat_file(res_forcef)
     n1=len(res_crd)
     n2=len(res_force)
     if n1 == n2:
@@ -347,7 +351,7 @@ for i in range(1, num_iter+1):
         res_forcel = res_forcel + res_force
         for j in range(1, n1+1):
             datf = window_dir + 'distperframe' + str(j) + '.dat'
-            data = read_file(datf)
+            data = read_dat_file(datf)
             datal.append(data)
     else:
         raise ValueError('The number of distances and force constants are '
@@ -369,8 +373,8 @@ for i in range(0, num_sims):
     data_dict[i+1] = window_datai
 
 #Plot the first and last string
-plot_string(num_imgs, dim, data_dict, 1, num_imgs, react_paths, 'First_string.pdf')
-plot_string(num_imgs, dim, data_dict, final_i, final_t, react_paths, 'Last_string.pdf')
+plot_string_1D(num_imgs, dim, data_dict, 1, num_imgs, react_paths, 'First_string.pdf')
+plot_string_1D(num_imgs, dim, data_dict, final_i, final_t, react_paths, 'Last_string.pdf')
 
 #############################THE WHAM CODE###############################
 
