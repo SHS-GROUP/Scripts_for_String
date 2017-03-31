@@ -24,6 +24,40 @@ class window_data:
         self.avg = avg_val_list
         self.std = std_val_list
 
+#About the color dictionary
+#color_dict = {1: 'b', 2: 'g',
+#              3: 'r', 4: 'c',
+#              5: 'm', 6: 'y',
+#              7: 'y', 8: 'k'}
+
+def get_color_dict(dim):
+
+    color_dict = {}
+    color_disc = [[0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]]
+
+    if dim <= 7:
+       pass
+    else:
+        tmp_num1=(dim - 7)%6
+        tmp_num2=(dim - 7)//6 + 1
+
+        if tmp_num1 != 0:
+            tmp_num2 = tmp_num2 + 1
+
+        for i in xrange(0, len(color_disc)-1):
+           first = color_disc[i]
+           second = color_disc[i+1]
+           for j in xrange(1, tmp_num2):
+              color = [first[k] + (second[k] - first[k]) * float(j)/float(tmp_num2) for k in xrange(3)]
+              color_disc.append(color)
+
+    color_disc = sorted(color_disc)
+
+    for i in range(0, dim):
+        color_dict[i+1] = color_disc[i]
+
+    return color_dict
+
 def write_list(fname, list_name, num_sims):
     writef = open(fname, 'w')
     for i in xrange(1, len(list_name)+1):
@@ -47,6 +81,7 @@ def read_file(fname):
     return dat_array
 
 def plot_string(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, figname):
+    color_dict = get_color_dict(dim)
     x = range(1, num_imgs+1) # X axis for plotting
     for i in range(1, dim+1):
         y1 = [] # Y axis for constraints
@@ -70,7 +105,7 @@ def plot_string(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, fig
     plt.close()
     #plt.show()
 
-def plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, clr_num, rc_label):
+def plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, rc_label):
 
     free_ene_RC = [0.0 for i in xrange(num_bins)]
     for i in xrange(num_bins):
@@ -78,25 +113,60 @@ def plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, clr_num, rc_label):
 
     min_free_ene = min(free_ene_RC)
     free_ene_RC = [free_ene - min_free_ene for free_ene  in free_ene_RC]
-    clr = color_dict[clr_num]
 
-    plt.plot(xaxis_RC, free_ene_RC, color=clr, linestyle='-')
+    plt.plot(xaxis_RC, free_ene_RC, 'k-')
     plt.ylabel('Free Energy (kcal/mol)')
     plt.xlabel(rc_label)
     plt.savefig(figname)
     plt.close()
 
-def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2):
+def get_string_2D(ini_image, fin_image, rc_diml1, coefl1, rc_diml2, coefl2):
+
+    crd = []
+    crd1 = []
+    crd2 = []
+    for i in xrange(ini_image, fin_image):
+        data_val1 = 0.0
+        for k in xrange(len(rc_diml1)):
+            tmp_data = data_dict[i+1].equ_dis[rc_diml1[k]-1]
+            tmp_data = tmp_data * float(coefl1[k])
+            data_val1 = data_val1 + tmp_data
+        crd1.append(data_val1)
+
+        data_val2 = 0.0
+        for k in xrange(len(rc_diml2)):
+            tmp_data = data_dict[i+1].equ_dis[rc_diml2[k]-1]
+            tmp_data = tmp_data * float(coefl2[k])
+            data_val2 = data_val2 + tmp_data
+        crd2.append(data_val2)
+
+    crd.append(crd1)
+    crd.append(crd2)
+    return crd
+
+def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, ini_crd=[], fin_crd=[]):
 
     free_ene_RC12 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
     for i in xrange(num_bins1):
         for j in xrange(num_bins2):
             free_ene_RC12[i][j] = -KbT*log(Prob_RC12[i][j])
 
-    min_free_ene = min(min(Prob_RC12))
+    max_free_ene = -999.0
+    min_free_ene = 999.0
     for i in xrange(num_bins1):
         for j in xrange(num_bins2):
-            free_ene_RC12[i][j] = free_ene_RC12[i][j] - min_free_ene
+            if free_ene_RC12[i][j] < min_free_ene:
+                min_free_ene = free_ene_RC12[i][j]
+            if free_ene_RC12[i][j] > max_free_ene:
+                max_free_ene = free_ene_RC12[i][j]
+
+    w_free_ene = open(figname+'.txt', 'w')
+    for i in xrange(num_bins1):
+        for j in xrange(num_bins2):
+            free_ene_RC12[i][j] = round(free_ene_RC12[i][j] - min_free_ene, 3)
+            print("%-10.3f" %free_ene_RC12[i][j], end=' ', file=w_free_ene)
+        print('', file=w_free_ene)
+    w_free_ene.close()
 
     """
     CS = plt.contour(xaxis_RC1, xaxis_RC2, free_ene_RC12, 6,
@@ -105,10 +175,18 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
     plt.clabel(CS, fontsize=9, inline=1)
     """
 
-    cs = plt.pcolor(free_ene_RC12)
-    cb = plt.colorbar(cs)
-    cb.set_label('Free Energy (kcal/mol)')
-    plt.savefig(figname)
+    plt.contourf(xaxis_RC1, xaxis_RC2, free_ene_RC12, cmap='jet')
+    plt.colorbar().set_label('Free Energy (kcal/mol)')
+    plt.xlabel(xlabel1)
+    plt.ylabel(xlabel2)
+
+    if ini_crd != []:
+        plt.scatter(ini_crd[0], ini_crd[1], color='r', marker='o', linestyle='-', linewidth=2.0)
+
+    if fin_crd != []:
+        plt.scatter(fin_crd[0], fin_crd[1], color='g', marker='o', linestyle='-', linewidth=2.0)
+
+    plt.savefig(figname, dpi=900)
     plt.close()
 
 def get_rc_data_1D(rc_diml, coefl, num_bins):
@@ -120,9 +198,10 @@ def get_rc_data_1D(rc_diml, coefl, num_bins):
 
     # Get the sampling data for a certain dimension
     data_RC = []
-
+    data_RCl = []
     for i in xrange(0, num_sims):
         data_per_sim = len(data_dict[i+1].data)
+        data_RC_per_sim = []
         for j in xrange(0, data_per_sim):
             data_val = 0.0
             for k in xrange(len(rc_diml)):
@@ -130,6 +209,8 @@ def get_rc_data_1D(rc_diml, coefl, num_bins):
                 tmp_data = tmp_data * float(coefl[k])
                 data_val = data_val + tmp_data
             data_RC.append(data_val)
+            data_RC_per_sim.append(data_val)
+        data_RCl.append(data_RC_per_sim)
 
     # Determine the plotting bin size
     val_min = min(data_RC) - 0.00001
@@ -139,6 +220,21 @@ def get_rc_data_1D(rc_diml, coefl, num_bins):
     binsize_RC = bins_RC[1] - bins_RC[0]
     plot_bins_RC = bins_RC[0:-1]
     xaxis_RC = [i + binsize_RC/2.0 for i in plot_bins_RC]
+
+    color_dict = get_color_dict(num_sims)
+
+    for i in xrange(0, num_sims):
+        data_RC_per_sim = data_RCl[i]
+        count_RC, bins_RCp = histogram(data_RC_per_sim, bins=bins_RC)
+        clr = color_dict[i+1]
+        plt.plot(xaxis_RC, count_RC, color=clr, linestyle='-')
+
+    figname = ''
+    for i in xrange(0, len(rc_diml)):
+        figname = figname + str(round(coefl[i],1)) + 'RC' + str(rc_diml[i]) 
+    figname = figname + 'globin.pdf'
+    plt.savefig(figname)
+    plt.close()
 
     return data_RC, bins_RC, xaxis_RC
 
@@ -174,7 +270,7 @@ def gene_free_ene_1D(rc_diml, coefl, num_bins, figname, clr_num, rc_label):
             Prob_RC[count_indx] = Prob_RC[count_indx] + 1.0/denom
             count = count + 1
 
-    plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, clr_num, rc_label)
+    plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, rc_label)
 
 def gene_free_ene_2D(rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2):
 
@@ -213,65 +309,14 @@ def gene_free_ene_2D(rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, f
 
             Prob_RC12[count_indx1][count_indx2] = Prob_RC12[count_indx1][count_indx2] + 1.0/denom
             count = count + 1
-
-    plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2)
-    
-
-"""
-def gene_free_ene_2D(rc_dim1, rc_dim2, figname, clr_num, rc_label):
-    # Get the sampling data for a certain dimension
-    data_RC = []
-
-    # Determine the plotting bin size
-    val_min = min(data_RC) - 0.00001
-    val_max = max(data_RC) + 0.00001
-    #print(val_min, val_max)
-
-    bins_RC = linspace(val_min, val_max, num_bins+1)
-    binsize_RC = bins_RC[1] - bins_RC[0]
-    plot_bins_RC = bins_RC[0:-1]
-    xaxis_RC = [i + binsize_RC/2.0 for i in plot_bins_RC]
  
-    # Generate the free energy for each bin
-    Prob_RC = [0.0 for i in xrange(num_bins) for j in xrange(num_bins)]
+    ini_crd = get_string_2D(0, 19, rc_diml1, coefl1, rc_diml2, coefl2)
+    fin_crd = get_string_2D(num_sims-19, num_sims, rc_diml1, coefl1, rc_diml2, coefl2)
+    plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, ini_crd, fin_crd)
 
-    count = 0
-    for i in xrange(0, num_sims):
-        data_per_sim = len(data_dict[i+1].data)
-        for j in xrange(0, data_per_sim):
-            each_data_RC = data_RC[count]
-            each_count_RC, bins_RCp = histogram(each_data_RC, bins=bins_RC)
-            count_indx = list(each_count_RC).index(1)
-            #print(count_indx)
-
-            #Unbias the free energy
-            Ubias = [0.0 for zero_val in xrange(num_sims)]
-            for k in xrange(num_sims):
-                for ii in xrange(0, dim):
-                    equ_dis = data_dict[k+1].equ_dis[ii]
-                    constr = data_dict[k+1].constr[ii]
-                    samp_dis = data_dict[i+1].data[j,ii]
-                    Ubias[k] = Ubias[k] + 0.5 * constr * (samp_dis - equ_dis)**2
-
-            denom = 0.0
-            for l in xrange(num_sims):
-                data_per_sim2 = len(data_dict[l+1].data)
-                denom = denom + data_per_sim2 * exp((Fx_old[l]-Ubias[l])/KbT)
-
-            Prob_RC[count_indx] = Prob_RC[count_indx] + 1.0/denom
-            count = count + 1
-
-    free_ene_RC = [0.0 for ii in xrange(num_bins)]
-
-    for i in xrange(num_bins):
-        free_ene_RC[i] = -KbT*log(Prob_RC[i])
-
-    min_free_ene = min(free_ene_RC)
-    free_ene_RC = [free_ene - min_free_ene for free_ene  in free_ene_RC]
-    plot_free_ene_1D(xaxis_RC, free_ene_RC, figname, clr_num, rc_label)
-"""
-
-##############################MAIN PROGRAM#####################################
+###############################################################################
+                                   #MAIN PROGRAM
+###############################################################################
 
 dim=3 #Dimension of the reaction coordinates
 #Reaction path names
@@ -282,32 +327,7 @@ num_bins=20 #Number of bins
 final_i = num_imgs*(num_iter-1) + 1
 final_t = final_i + num_imgs - 1
 
-#About the color dictionary
-#color_dict = {1: 'b', 2: 'g',
-#              3: 'r', 4: 'c',
-#              5: 'm', 6: 'y',
-#              7: 'y', 8: 'k'}
-
-color_dict = {}
-color_disc = [[0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]]
-
-if dim <= 7:
-    pass
-else:
-    tmp_num1=(dim - 7)%6
-    tmp_num2=(dim - 7)//6
-    if tmp_num1 != 0:
-        tmp_num2 = tmp_num2 + 1
-    for i in xrange(0, len(color_disc1)-1):
-       first = color_disc1[i]
-       second = color_disc1[i+1]
-       for j in xrange(1, tmp_num2):
-          color = [first[j] + (second[j] - first[j])* float(j)/float(tmp_num2) for j in xrange(3)]
-          color_disc.append(color)
-color_disc = sorted(color_disc)
-
-for i in range(0, dim):
-    color_dict[i+1] = color_disc[i]
+#############################READ THE DATA FILES###############################
 
 #All of the following list has dimension of iteration * images
 res_crdl = []
@@ -351,6 +371,8 @@ for i in range(0, num_sims):
 #Plot the first and last string
 plot_string(num_imgs, dim, data_dict, 1, num_imgs, react_paths, 'First_string.pdf')
 plot_string(num_imgs, dim, data_dict, final_i, final_t, react_paths, 'Last_string.pdf')
+
+#############################THE WHAM CODE###############################
 
 KbT = 0.596 #Energy unit
 Ubiasl = []
@@ -419,16 +441,25 @@ cost_time = time.time() - start_time
 print("%d Iterations were taken!" %(iter))
 print("It costs %f seconds to converge the free energies of windows!" %cost_time)
 
-#for i in xrange(0, dim):
-#    plot_dim = i + 1
-#    clr_num = i + 1
-#    figname = 'RC' + str(i+1) + '_Free_Energy.pdf'
-#    gene_free_ene_1D([plot_dim], [1.0], num_bins, figname, clr_num, react_paths[i])
+#############################PRINT THE FINAL DATA############################
 
-#gene_free_ene_1D([1, 2], [1.0, -1.0], num_bins, 'R1-R2.pdf', 1, 'R1-R2')
+# For each dimension
+for i in xrange(0, dim):
+    plot_dim = i + 1
+    clr_num = i + 1
+    figname = 'R' + str(i+1) + '.pdf'
+    gene_free_ene_1D([plot_dim], [1.0], num_bins, figname, clr_num, react_paths[i])
 
+# For linear combination of 1D system: e.g. R1-R2
+gene_free_ene_1D([1, 2], [1.0, -1.0], num_bins, 'R1-R2.pdf', 1, 'R1-R2')
+
+# For normal 2D system: e.g. R1 vs R2
+gene_free_ene_2D([1], [1.0], [2], [1.0], num_bins, num_bins, 'R1_R2.pdf', 'R1', 'R2')
+
+# For 2D system with linear combination: e.g. R1-R2 vs R3
 gene_free_ene_2D([1, 2], [1.0, -1.0], [3], [1.0], num_bins, num_bins, 'R1-R2_R3.pdf', 'R1-R2', 'R3')
 
 cost_time = time.time() - start_time
 print("It costs %f seconds to finish the job!" %cost_time)
+quit()
 
