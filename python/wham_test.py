@@ -111,7 +111,12 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
     plt.savefig(figname)
     plt.close()
 
-def get_rc_data_1D(rc_dim, num_bins):
+def get_rc_data_1D(rc_diml, coefl, num_bins):
+
+    if len(rc_diml) != len(coefl):
+        raise ValueError("The length of the coordinate dimensions and "
+                         "coefficients in the linear combination of "
+                         "reaction coordinate are not equal!")
 
     # Get the sampling data for a certain dimension
     data_RC = []
@@ -119,30 +124,11 @@ def get_rc_data_1D(rc_dim, num_bins):
     for i in xrange(0, num_sims):
         data_per_sim = len(data_dict[i+1].data)
         for j in xrange(0, data_per_sim):
-            data_RC.append(data_dict[i+1].data[j,rc_dim-1])
-
-    # Determine the plotting bin size
-    val_min = min(data_RC) - 0.00001
-    val_max = max(data_RC) + 0.00001
-
-    bins_RC = linspace(val_min, val_max, num_bins+1)
-    binsize_RC = bins_RC[1] - bins_RC[0]
-    plot_bins_RC = bins_RC[0:-1]
-    xaxis_RC = [i + binsize_RC/2.0 for i in plot_bins_RC]
-
-    return data_RC, bins_RC, xaxis_RC
-
-def get_rc_data_2D_comb(rc_dim1, rc_dim2, coef=[1, -1]):
-
-    # Get the sampling data for a certain dimension
-    data_RC = []
-
-    for i in xrange(0, num_sims):
-        data_per_sim = len(data_dict[i+1].data)
-        for j in xrange(0, data_per_sim):
-            data1 = data_dict[i+1].data[j,rc_dim1-1]
-            data2 = data_dict[i+1].data[j,rc_dim2-1]
-            data_val = coef[0]*data1 + coef[1]*data2
+            data_val = 0.0
+            for k in xrange(len(rc_diml)):
+                tmp_data = data_dict[i+1].data[j,rc_diml[k]-1]
+                tmp_data = tmp_data * float(coefl[k])
+                data_val = data_val + tmp_data
             data_RC.append(data_val)
 
     # Determine the plotting bin size
@@ -156,9 +142,9 @@ def get_rc_data_2D_comb(rc_dim1, rc_dim2, coef=[1, -1]):
 
     return data_RC, bins_RC, xaxis_RC
 
-def gene_free_ene_1D(rc_dim, num_bins, figname, clr_num, rc_label):
+def gene_free_ene_1D(rc_diml, coefl, num_bins, figname, clr_num, rc_label):
 
-    data_RC, bins_RC, xaxis_RC = get_rc_data_1D(rc_dim, num_bins)
+    data_RC, bins_RC, xaxis_RC = get_rc_data_1D(rc_diml, coefl, num_bins)
 
     # Generate the free energy for each bin
     Prob_RC = [0.0 for i in xrange(num_bins)]
@@ -190,10 +176,10 @@ def gene_free_ene_1D(rc_dim, num_bins, figname, clr_num, rc_label):
 
     plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, clr_num, rc_label)
 
-def gene_free_ene_2D(rc_dim1, rc_dim2, num_bins1, num_bins2, figname, xlabel1, xlabel2):
+def gene_free_ene_2D(rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2):
 
-    data_RC1, bins_RC1, xaxis_RC1 = get_rc_data_1D(rc_dim1, num_bins1)
-    data_RC2, bins_RC2, xaxis_RC2 = get_rc_data_1D(rc_dim2, num_bins2)
+    data_RC1, bins_RC1, xaxis_RC1 = get_rc_data_1D(rc_diml1, coefl1, num_bins1)
+    data_RC2, bins_RC2, xaxis_RC2 = get_rc_data_1D(rc_diml2, coefl2, num_bins2)
 
     # Generate the free energy for each bin
     Prob_RC12 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
@@ -431,14 +417,18 @@ write_list('Fx_prog.dat', Fx_prog, num_sims)
 cost_time = time.time() - start_time
 
 print("%d Iterations were taken!" %(iter))
-print("It costs %f seconds!" %cost_time)
+print("It costs %f seconds to converge the free energies of windows!" %cost_time)
 
+#for i in xrange(0, dim):
+#    plot_dim = i + 1
+#    clr_num = i + 1
+#    figname = 'RC' + str(i+1) + '_Free_Energy.pdf'
+#    gene_free_ene_1D([plot_dim], [1.0], num_bins, figname, clr_num, react_paths[i])
 
-for i in xrange(0, dim):
-    plot_dim = i + 1
-    clr_num = i + 1
-    figname = 'RC' + str(i+1) + '_Free_Energy.pdf'
-    gene_free_ene_1D(plot_dim, num_bins, figname, clr_num, react_paths[i])
+#gene_free_ene_1D([1, 2], [1.0, -1.0], num_bins, 'R1-R2.pdf', 1, 'R1-R2')
 
-gene_free_ene_2D(1, 2, num_bins, num_bins, 'test.pdf', react_paths[0], react_paths[1])
+gene_free_ene_2D([1, 2], [1.0, -1.0], [3], [1.0], num_bins, num_bins, 'R1-R2_R3.pdf', 'R1-R2', 'R3')
+
+cost_time = time.time() - start_time
+print("It costs %f seconds to finish the job!" %cost_time)
 
