@@ -132,17 +132,17 @@ def get_string_2D(ini_image, fin_image, rc_diml1, coefl1, rc_diml2, coefl2):
     crd = []
     crd1 = []
     crd2 = []
-    for i in xrange(ini_image, fin_image):
+    for i in xrange(ini_image, fin_image+1):
         data_val1 = 0.0
         for k in xrange(len(rc_diml1)):
-            tmp_data = data_dict[i+1].equ_dis[rc_diml1[k]-1]
+            tmp_data = data_dict[i].equ_dis[rc_diml1[k]-1]
             tmp_data = tmp_data * float(coefl1[k])
             data_val1 = data_val1 + tmp_data
         crd1.append(data_val1)
 
         data_val2 = 0.0
         for k in xrange(len(rc_diml2)):
-            tmp_data = data_dict[i+1].equ_dis[rc_diml2[k]-1]
+            tmp_data = data_dict[i].equ_dis[rc_diml2[k]-1]
             tmp_data = tmp_data * float(coefl2[k])
             data_val2 = data_val2 + tmp_data
         crd2.append(data_val2)
@@ -242,7 +242,7 @@ def get_rc_data_1D(rc_diml, coefl, num_bins):
 
     return data_RC, bins_RC, xaxis_RC
 
-def gene_free_ene_1D(rc_diml, coefl, num_bins, figname, clr_num, rc_label):
+def gene_free_ene_1D(rc_diml, coefl, num_bins, figname, rc_label):
 
     data_RC, bins_RC, xaxis_RC = get_rc_data_1D(rc_diml, coefl, num_bins)
 
@@ -276,7 +276,7 @@ def gene_free_ene_1D(rc_diml, coefl, num_bins, figname, clr_num, rc_label):
 
     plot_free_ene_1D(num_bins, xaxis_RC, Prob_RC, figname, rc_label)
 
-def gene_free_ene_2D(rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2):
+def gene_free_ene_2D(rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq):
 
     data_RC1, bins_RC1, xaxis_RC1 = get_rc_data_1D(rc_diml1, coefl1, num_bins1)
     data_RC2, bins_RC2, xaxis_RC2 = get_rc_data_1D(rc_diml2, coefl2, num_bins2)
@@ -313,23 +313,30 @@ def gene_free_ene_2D(rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, f
 
             Prob_RC12[count_indx1][count_indx2] = Prob_RC12[count_indx1][count_indx2] + 1.0/denom
             count = count + 1
- 
-    ini_crd = get_string_2D(0, 19, rc_diml1, coefl1, rc_diml2, coefl2)
-    fin_crd = get_string_2D(num_sims-19, num_sims, rc_diml1, coefl1, rc_diml2, coefl2)
+
+    ini_crd = get_string_2D(string_seq[0], string_seq[1], rc_diml1, coefl1, rc_diml2, coefl2)
+    fin_crd = get_string_2D(string_seq[2], string_seq[3], rc_diml1, coefl1, rc_diml2, coefl2)
     plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, ini_crd, fin_crd)
 
 ###############################################################################
                                    #MAIN PROGRAM
 ###############################################################################
 
+#############################SETTING VARAIBLES#################################
+
 dim=3 #Dimension of the reaction coordinates
-#Reaction path names
-react_paths = ['C-H', 'O-H', 'C-O']
-num_iter=5 #Number of iteration for the string calculations
-num_imgs=18 #Number of images for the string
+react_paths = ['C-O', 'O-H', 'C-H'] #Reaction path names
+num_iter=4 #Number of iteration for the string calculations
+num_imgs=19 #Number of images for the string
 num_bins=20 #Number of bins
-final_i = num_imgs*(num_iter-1) + 1
+wham_conv = 0.01 #WHAM converge creteria
+
+# The initial string and final string
+first_i = 1
+first_t = num_imgs
+final_i = num_imgs * (num_iter-1) + 1
 final_t = final_i + num_imgs - 1
+string_seq = [first_i, first_t, final_i, final_t]
 
 #############################READ THE DATA FILES###############################
 
@@ -373,7 +380,7 @@ for i in range(0, num_sims):
     data_dict[i+1] = window_datai
 
 #Plot the first and last string
-plot_string_1D(num_imgs, dim, data_dict, 1, num_imgs, react_paths, 'First_string.pdf')
+plot_string_1D(num_imgs, dim, data_dict, first_i, first_t, react_paths, 'First_string.pdf')
 plot_string_1D(num_imgs, dim, data_dict, final_i, final_t, react_paths, 'Last_string.pdf')
 
 #############################THE WHAM CODE###############################
@@ -397,9 +404,9 @@ for i in xrange(0, num_sims):
 Fx_old = [0.0 for i in xrange(num_sims)]
 Fx_prog = []
 iter = 0
-change = 0.05
+change = 999.0
 
-while change>0.001:
+while change > wham_conv:
     # This part is based on the equations 12-15 on the paper
     # of Souaille and Roux on Computer Physics Communications
     # 2001, 135, 40-57
@@ -450,18 +457,17 @@ print("It costs %f seconds to converge the free energies of windows!" %cost_time
 # For each dimension
 for i in xrange(0, dim):
     plot_dim = i + 1
-    clr_num = i + 1
     figname = 'R' + str(i+1) + '.pdf'
-    gene_free_ene_1D([plot_dim], [1.0], num_bins, figname, clr_num, react_paths[i])
+    gene_free_ene_1D([plot_dim], [1.0], num_bins, figname, react_paths[i])
 
-# For linear combination of 1D system: e.g. R1-R2
-gene_free_ene_1D([1, 2], [1.0, -1.0], num_bins, 'R1-R2.pdf', 1, 'R1-R2')
+# For linear combination of 1D system: e.g. R2-R3
+gene_free_ene_1D([2, 3], [1.0, -1.0], num_bins, 'R2-R3.pdf', 'R2-R3')
 
-# For normal 2D system: e.g. R1 vs R2
-gene_free_ene_2D([1], [1.0], [2], [1.0], num_bins, num_bins, 'R1_R2.pdf', 'R1', 'R2')
+# For normal 2D system: e.g. R2 vs R3
+gene_free_ene_2D([2], [1.0], [3], [1.0], num_bins, num_bins, 'R2_R3.pdf', 'R2', 'R3', string_seq)
 
-# For 2D system with linear combination: e.g. R1-R2 vs R3
-gene_free_ene_2D([1, 2], [1.0, -1.0], [3], [1.0], num_bins, num_bins, 'R1-R2_R3.pdf', 'R1-R2', 'R3')
+# For 2D system with linear combination: e.g. R1 vs R2-R3
+gene_free_ene_2D([1], [1.0], [2, 3], [1.0, -1.0], num_bins, num_bins, 'R1_R2-R3.pdf', 'R1', 'R2-R3', string_seq)
 
 cost_time = time.time() - start_time
 print("It costs %f seconds to finish the job!" %cost_time)
