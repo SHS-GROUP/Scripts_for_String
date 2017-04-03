@@ -1,11 +1,13 @@
 #!/home/pengfeil/AMBER/amber16/amber16/miniconda/bin/python
-# Filename: wham_test.py
+# Filename: wham_v1-beta.py
 from __future__ import print_function
 from numpy import average, std, arange
 from numpy import array, matrix, exp, log, linspace, histogram
 import matplotlib.pyplot as plt
 import time
 from string_functions import window_data, get_color_dict, write_list, write_xy_lists, read_dat_file, get_rc_data_1D
+
+KbT = 0.596 #Energy unit, which is a global variable
 
 ###############################################################################
 #                    The first part is about one dimension
@@ -58,7 +60,7 @@ def plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label):
     plt.savefig(figname)
     plt.close()
 
-def gene_free_ene_1D(data_dict, num_sims, Fx_old, rc_diml, coefl, num_bins, figname, rc_label):
+def gene_free_ene_1D(data_dict, num_sims, dim, Fx_old, rc_diml, coefl, num_bins, figname, rc_label):
 
     global KbT
 
@@ -164,7 +166,7 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
     plt.savefig(figname, dpi=900)
     plt.close()
 
-def gene_free_ene_2D(data_dict, num_sims, Fx_old, rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq):
+def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq):
 
     global KbT
 
@@ -339,13 +341,15 @@ def wham(dim, react_paths, num_imgs, num_cycles, num_bins, wham_conv):
     return data_dict, num_sims, string_seq, Fx_old
 
 ###############################################################################
-                                   #MAIN PROGRAM
+                                   #Examples
 ###############################################################################
-KbT = 0.596 #Energy unit, which is a global variable
+"""
+#!/home/pengfeil/AMBER/amber16/amber16/miniconda/bin/python
+from wham_v1_beta import *
 
 start_time0 = time.time() #Count the time
 
-# Setting variables
+# 1. Setting variables
 dim=3 #Dimension of the reaction coordinates
 react_paths = ['C-O', 'O-H', 'C-H'] #Reaction path names
 num_imgs=18 #Number of images for the string
@@ -353,27 +357,26 @@ num_cycles=5 #Number of iteration for the string calculations
 num_bins=20 #Number of bins
 wham_conv = 0.001 #WHAM converge creteria
 
-# Do the WHAM cycle
+# 2. Do the WHAM cycle
 data_dict, num_sims, string_seq, Fx_old = wham(dim, react_paths, num_imgs, num_cycles, num_bins, wham_conv)
 
-# Print the final data
-
-# For each dimension
+# 3. Print the final data
+# 3.1. For each dimension
 for i in xrange(0, dim):
-    plot_dim = i + 1
-    figname = 'R' + str(i+1) + '.pdf'
-    gene_free_ene_1D(data_dict, num_sims, Fx_old, [plot_dim], [1.0], num_bins, figname, react_paths[i])
+   plot_dim = i + 1
+   figname = 'R' + str(i+1) + '.pdf'
+   gene_free_ene_1D(data_dict, num_sims, dim, Fx_old, [plot_dim], [1.0], num_bins, figname, react_paths[i])
 
-# For linear combination of 1D system: e.g. R2-R3
-# gene_free_ene_1D(data_dict, num_sims, Fx_old, [2, 3], [1.0, -1.0], num_bins, 'R2-R3.pdf', 'R2-R3')
+# 3.2. For linear combination of 1D system: e.g. R2-R3
+gene_free_ene_1D(data_dict, num_sims, dim, Fx_old, [2, 3], [1.0, -1.0], num_bins, 'R2-R3.pdf', 'R2-R3')
 
-# For normal 2D system: e.g. R2 vs R3
-# gene_free_ene_2D(data_dict, num_sims, Fx_old, [2], [1.0], [3], [1.0], num_bins, num_bins, 'R2_R3.pdf', 'R2', 'R3', string_seq)
+# 3.3. For normal 2D system: e.g. R2 vs R3
+gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, [2], [1.0], [3], [1.0], num_bins, num_bins, 'R2_R3.pdf', 'R2', 'R3', string_seq)
 
-# For 2D system with linear combination: e.g. R1 vs R2-R3
-# gene_free_ene_2D(data_dict, num_sims, Fx_old, [1], [1.0], [2, 3], [1.0, -1.0], num_bins, num_bins, 'R1_R2-R3.pdf', 'R1', 'R2-R3', string_seq)
+# 3.4. For 2D system with linear combination: e.g. R1 vs R2-R3
+gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, [1], [1.0], [2, 3], [1.0, -1.0], num_bins, num_bins, 'R1_R2-R3.pdf', 'R1', 'R2-R3', string_seq)
 
 cost_time = time.time() - start_time0
 print("It costs %f seconds to finish the job!" %cost_time)
 quit()
-
+"""
