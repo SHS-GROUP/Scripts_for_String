@@ -4,6 +4,7 @@ from __future__ import print_function, division
 from numpy import (array, mat, polyfit, polyval, polyder,
                    linspace, sqrt, trapz, zeros)
 import matplotlib.pyplot as plt
+from string_functions import get_color_dict, get_bpairsl
 from optparse import OptionParser
 
 parser = OptionParser("Usage: -i input_file -d dimension --img img_number --nimg new_img_number\n"
@@ -50,40 +51,9 @@ def read_datf(fname, str_dim):
     disl = mat(disl).T
     return disl
 
-bpairsl = []
-inputf = open(options.input, 'r')
-for line in inputf:
-    line = line.split()
-    if '\n' in line:
-        line.remove('\n')
-    if ',' in line:
-        line.remove(',')
-    if '' in line:
-        line.remove('')
-    if ' ' in line:
-        line.remove(' ')
-    if ':' in line:
-        line.remove(':')
-    # Blank line
-    if (len(line) == 0):
-        continue
-    # Comment
-    elif (line[0][0] == '#'):
-        continue
-    elif len(line) == 1:
-        bpairs0 = line
-        for i in bpairs0:
-            bpairs = i.split('-')
-            try:
-                bpairs = [int(i) for i in bpairs]
-            except:
-                raise ValueError('Should be integer numbers in the '
-                               'two ends of dash symbol.')
-            if len(bpairs) != 2:
-                raise ValueError('Should be only two numbers in the pairs!')
-            bpairs = tuple(bpairs)
-            bpairsl.append(bpairs)
-inputf.close()
+bpairsl = get_bpairsl(options.input)
+
+color_dict = get_color_dict(options.str_dim)
 
 avg_val_matrix = [[0.0 for i in range(options.imgs)] for j in range(options.str_dim)]
 avg_val_matrix = mat(avg_val_matrix)
@@ -97,6 +67,8 @@ xval = array(xval)
 # X value with high resolution for calculating integral
 xval_hr = [0.1*i for i in xrange(10, options.imgs*10+1)] 
 xval_hr = array(xval_hr)
+
+# Print for each dimension
 pcoefl = []
 for dim in xrange(0, options.str_dim):
     yval = avg_val_matrix[dim]
@@ -105,8 +77,23 @@ for dim in xrange(0, options.str_dim):
     pcoefl.append(pcoef)
     yval_fitted = [polyval(pcoef, i) for i in xval_hr]
     plt.plot(xval, yval, 'ro', xval_hr, yval_fitted, 'b-')
-    fig_name = str(dim+1) + '.png'
-    plt.savefig(fig_name, format='png')
+    fig_name = str(dim+1) + '.pdf'
+    plt.xticks(xval)
+    plt.savefig(fig_name, format='pdf')
+    plt.close()
+
+# Print for all the dimensions
+for dim in xrange(0, options.str_dim):
+    yval = avg_val_matrix[dim]
+    yval = array(yval)[0]
+    pcoef = polyfit(xval, yval, options.order)
+    yval_fitted = [polyval(pcoef, i) for i in xval_hr]
+    clr = color_dict[dim+1]
+    plt.plot(xval, yval, color=clr, linestyle='', marker='o')
+    plt.plot(xval_hr, yval_fitted, 'k-')
+plt.xticks(xval)
+plt.savefig('total.pdf', format='pdf')
+plt.close()
 
 # Calcualte the total length of the string
 yval_hr = [0.0 for i in xval_hr]
