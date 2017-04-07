@@ -2,7 +2,7 @@
 # Filename: wham_v1-beta.py
 from __future__ import print_function
 from numpy import average, std, arange
-from numpy import array, matrix, exp, log, linspace, histogram
+from numpy import array, matrix, exp, log, linspace, histogram, transpose
 import matplotlib.pyplot as plt
 import time
 from string_functions import window_data, get_color_dict, write_list, write_xy_lists, read_dat_file, get_rc_data_1D
@@ -57,7 +57,7 @@ def plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label):
     plt.plot(xaxis_RC, free_ene_RC, 'k-')
     plt.ylabel('Free Energy (kcal/mol)')
     plt.xlabel(rc_label)
-    plt.savefig(figname)
+    plt.savefig(figname, dpi=900)
     plt.close()
 
 def gene_free_ene_1D(data_dict, num_sims, dim, Fx_old, rc_diml, coefl, num_bins, figname, rc_label):
@@ -123,7 +123,7 @@ def get_string_2D(data_dict, ini_image, fin_image, rc_diml1, coefl1, rc_diml2, c
     crd.append(crd2)
     return crd
 
-def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, ini_crd=[], fin_crd=[]):
+def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, colmap, ini_crd=[], fin_crd=[]):
 
     global KbT
 
@@ -151,8 +151,22 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
         print('', file=w_free_ene)
     w_free_ene.close()
 
+    # Print the X and Y axes coordinates
+    w_xaxis = open(figname + '.free_energy.xaxis_crd', 'w')
+    for i in xrange(num_bins1):
+        print("%-10.3f" %xaxis_RC1[i], file=w_xaxis)
+    w_xaxis.close()
+
+    # Print the X and Y axes coordinates
+    w_yaxis = open(figname + '.free_energy.yaxis_crd', 'w')
+    for i in xrange(num_bins2):
+        print("%-10.3f" %xaxis_RC2[i], file=w_yaxis)
+    w_yaxis.close()
+
+    free_ene_RC12 = transpose(free_ene_RC12)
+
     # Plot out the free energy
-    plt.contourf(xaxis_RC1, xaxis_RC2, free_ene_RC12, cmap='jet')
+    plt.contourf(xaxis_RC1, xaxis_RC2, free_ene_RC12, 50, cmap=colmap)
     plt.colorbar().set_label('Free Energy (kcal/mol)')
     plt.xlabel(xlabel1)
     plt.ylabel(xlabel2)
@@ -166,7 +180,7 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
     plt.savefig(figname, dpi=900)
     plt.close()
 
-def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq):
+def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq, colmap):
 
     global KbT
 
@@ -208,7 +222,7 @@ def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml
 
     ini_crd = get_string_2D(data_dict, string_seq[0], string_seq[1], rc_diml1, coefl1, rc_diml2, coefl2)
     fin_crd = get_string_2D(data_dict, string_seq[2], string_seq[3], rc_diml1, coefl1, rc_diml2, coefl2)
-    plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, ini_crd, fin_crd)
+    plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, colmap, ini_crd, fin_crd)
 
 ###############################################################################
                               #The WHAM iteration
@@ -300,8 +314,24 @@ def wham(dim, react_paths, num_imgs, num_cycles, num_bins, wham_conv):
         # Another reference:
         # http://membrane.urmc.rochester.edu/sites/default/files/wham/wham_talk.pdf
         expFx_old = [exp(i/KbT) for i in Fx_old]
+
         Fx = [0.0 for i in xrange(num_sims)] #Initial free energy
         kk=0
+
+        """
+        # The code from the WHAM paper
+
+        for k in xrange(0, num_sims):
+            ebfk = 0.0
+            for i in xrange(0, num_sims):
+                data_per_sim = len(data_dict[i+1].data)
+                for l in xrange(0, data_per_sim):
+                    bottom = 0.0
+                    for j in xrange(0, num_sims):
+                        bottom = Ubiasl[kk] * expFx_old[j]
+                    ebfk = ebfk + Ubiasl[kk]/bottom
+        """             
+
         for i in xrange(0, num_sims): #Sum over big N
             data_per_sim = len(data_dict[i+1].data) #Sum over little n
             for j in xrange(0, data_per_sim): 
@@ -313,8 +343,8 @@ def wham(dim, react_paths, num_imgs, num_cycles, num_bins, wham_conv):
                    kk = kk + 1
                 denom = 1.0/denom
                 for k in xrange(num_sims):
-                   Fx[k] = Fx[k] + Ubiasl_k[k] * denom
- 
+                    Fx[k] = Fx[k] + Ubiasl_k[k] * denom
+
         #Get the updated probability
         Fx = [-KbT*log(Fx[i]) for i in xrange(num_sims)] #Transfer the probability into free energy
         Fx0 = Fx[0] #Normalize the Fx values
