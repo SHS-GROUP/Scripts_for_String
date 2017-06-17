@@ -96,6 +96,9 @@ plt.savefig('total.pdf', format='pdf')
 plt.close()
 
 # Calcualte the total length of the string
+# Based on the formulation of ds = sqrt((dy1/dx)**2 + (dy2/dx)**2 + ... + (dyn/dx)**2) * dx
+# And then string length s = intergral(ds)
+#                          = integral (sqrt((dy1/dx)**2 + (dy2/dx)**2 + ... + (dyn/dx)**2) * dx) along x
 yval_hr = [0.0 for i in xval_hr]
 yval_hr = array(yval_hr)
 for dim in xrange(0, options.str_dim):

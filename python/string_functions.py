@@ -64,7 +64,7 @@ def write_xy_lists(fname, xlist, ylist):
         raise ValueError('The length of xlist and ylist should be the same!')
 
     writef = open(fname, 'w')
-    for i in xrange(1, len(xlist)):
+    for i in xrange(len(xlist)):
         j = xlist[i]
         k = ylist[i]
         print("%16.3f %16.3f" %(j, k), file=writef)
@@ -178,4 +178,15 @@ def get_bpairsl(fname):
                 bpairsl.append(bpairs)
     inputf.close()
     return bpairsl
+
+def read_list(fname, row):
+    data_list = []
+    r_file = open(fname, 'r')
+    for rline in r_file:
+        line = rline.strip('\n')
+        line = line.strip(' ')
+        line = line.split()
+        data_list.append(float(line[row-1]))
+    r_file.close()
+    return data_list
 

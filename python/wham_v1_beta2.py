@@ -9,6 +9,11 @@ from string_functions import window_data, get_color_dict, write_list, write_xy_l
 
 KbT = 0.596 #Energy unit, which is a global variable
 
+# Reference paper:
+# Souaille, M.; Roux, B., Extension to the weighted histogram analysis method:
+# combining umbrella sampling with free energy calculations. Computer physics
+# communications 2001, 135 (1), 40-57.
+
 ###############################################################################
 #                    The first part is about one dimension
 ###############################################################################
@@ -60,41 +65,66 @@ def plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label):
     plt.savefig(figname, dpi=900)
     plt.close()
 
-def gene_free_ene_1D(data_dict, num_sims, dim, Fx_old, rc_diml, coefl, num_bins, figname, rc_label):
-
-    global KbT
+def gene_free_ene_1D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml, coefl, num_bins, figname, rc_label):
+    """The part is from eqs 10 and 11 in the WHAM paper"""
 
     data_RC, bins_RC, xaxis_RC = get_rc_data_1D(data_dict, num_sims, rc_diml, coefl, num_bins)
-
     # Generate the free energy for each bin
     Prob_RC = [0.0 for i in xrange(num_bins)]
 
     count = 0
-    for i in xrange(0, num_sims):
+    kk = 0
+    for i in xrange(0, num_sims): #Sum over big N for i
         data_per_sim = len(data_dict[i+1].data)
-        for j in xrange(0, data_per_sim):
+        for l in xrange(0, data_per_sim): #Sum over little n for l
+
+            #Calculate the probability for each point
             each_data_RC = data_RC[count]
             each_count_RC, bins_RCp = histogram(each_data_RC, bins=bins_RC)
             count_indx = list(each_count_RC).index(1)
 
-            #Unbias the free energy
-            Ubias = [0.0 for zero_val in xrange(num_sims)]
-            for k in xrange(num_sims):
-                for ii in xrange(0, dim):
-                    equ_dis = data_dict[k+1].equ_dis[ii]
-                    constr = data_dict[k+1].constr[ii]
-                    samp_dis = data_dict[i+1].data[j,ii]
-                    Ubias[k] = Ubias[k] + 0.5 * constr * (samp_dis - equ_dis)**2
+            #Get the biased potentials
+            Ubiasl_j = []
+            for j in xrange(num_sims):
+                Ubiasl_j.append(Ubiasl[kk])
+                kk = kk + 1
 
+            #Obtain the denominator
             denom = 0.0
-            for l in xrange(num_sims):
-                data_per_sim2 = len(data_dict[l+1].data)
-                denom = denom + data_per_sim2 * exp((Fx_old[l]-Ubias[l])/KbT)
+            for k in xrange(num_sims):
+                data_per_sim2 = len(data_dict[k+1].data)
+                denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
 
             Prob_RC[count_indx] = Prob_RC[count_indx] + 1.0/denom
             count = count + 1
 
     plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label)
+
+def gene_unbiased_avg(data_dict, num_sims, dim, expFx, Ubiasl, data_list):
+    """This part is from eqs 19 and 20 from the WHAM paper"""
+
+    avg_val = [0.0 for i in xrange(num_sims)]
+
+    count = 0
+    kk = 0
+    for i in xrange(0, num_sims): #Sum over big N for i
+        data_per_sim = len(data_dict[i+1].data)
+        for l in xrange(0, data_per_sim): #Sum over little n for l
+
+            denom = 0.0 #Obtain the denominator, sum over big N for j
+            Ubiasl_j = []
+            for j in xrange(num_sims):
+                data_per_sim2 = len(data_dict[j+1].data)
+                denom = denom + float(data_per_sim2) * Ubiasl[kk] * expFx[j]
+                Ubiasl_j.append(Ubiasl[kk])
+                kk = kk + 1
+            denom = 1.0/denom
+
+            for k in xrange(num_sims):
+                avg_val[k] = avg_val[k] + data_list[count] * Ubiasl_j[k] * expFx[k] * denom
+            count = count + 1
+
+    return avg_val
 
 ###############################################################################
 #                    The second part is about two dimensional
@@ -227,9 +257,7 @@ def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, fign
     plot_string_free_energy(free_ene_RC12, ini_crd, xaxis_RC1, xaxis_RC2, num_bins1, num_bins2, figname + '.inistr')
     plot_string_free_energy(free_ene_RC12, fin_crd, xaxis_RC1, xaxis_RC2, num_bins1, num_bins2, figname + '.finstr')
 
-def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq, colmap):
-
-    global KbT
+def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1, rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2, string_seq, colmap):
 
     data_RC1, bins_RC1, xaxis_RC1 = get_rc_data_1D(data_dict, num_sims, rc_diml1, coefl1, num_bins1)
     data_RC2, bins_RC2, xaxis_RC2 = get_rc_data_1D(data_dict, num_sims, rc_diml2, coefl2, num_bins2)
@@ -238,9 +266,11 @@ def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml
     Prob_RC12 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
 
     count = 0
+    kk = 0
     for i in xrange(0, num_sims):
         data_per_sim = len(data_dict[i+1].data)
-        for j in xrange(0, data_per_sim):
+        for l in xrange(0, data_per_sim):
+
             # For the first dimension
             each_data_RC1 = data_RC1[count]
             each_count_RC1, bins_RCp1 = histogram(each_data_RC1, bins=bins_RC1)
@@ -250,19 +280,16 @@ def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml
             each_count_RC2, bins_RCp2 = histogram(each_data_RC2, bins=bins_RC2)
             count_indx2 = list(each_count_RC2).index(1)
 
-            #Unbias the free energy
-            Ubias = [0.0 for zero_val in xrange(num_sims)]
-            for k in xrange(num_sims):
-                for ii in xrange(0, dim):
-                    equ_dis = data_dict[k+1].equ_dis[ii]
-                    constr = data_dict[k+1].constr[ii]
-                    samp_dis = data_dict[i+1].data[j,ii]
-                    Ubias[k] = Ubias[k] + 0.5 * constr * (samp_dis - equ_dis)**2
+            #Get the biased potentials
+            Ubiasl_j = []
+            for j in xrange(num_sims):
+                Ubiasl_j.append(Ubiasl[kk])
+                kk = kk + 1
 
             denom = 0.0
-            for l in xrange(num_sims):
-                data_per_sim2 = len(data_dict[l+1].data)
-                denom = denom + data_per_sim2 * exp((Fx_old[l]-Ubias[l])/KbT)
+            for k in xrange(num_sims):
+                data_per_sim2 = len(data_dict[k+1].data)
+                denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
 
             Prob_RC12[count_indx1][count_indx2] = Prob_RC12[count_indx1][count_indx2] + 1.0/denom
             count = count + 1
@@ -271,6 +298,27 @@ def gene_free_ene_2D(data_dict, num_sims, dim, Fx_old, rc_diml1, coefl1, rc_diml
     fin_crd = get_string_2D(data_dict, string_seq[2], string_seq[3], rc_diml1, coefl1, rc_diml2, coefl2, figname + '.laststr')
     plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, colmap, ini_crd, fin_crd)
 
+###############################################################################
+#                    About getting the biased potentials
+###############################################################################
+"""
+def get_Ubiasl(data_dict, num_sims, dim):
+    #To get the e^(-beta*Wk(Ri,l)) list (totally has i*l*k terms)
+    Ubiasl = []
+    for i in xrange(0, num_sims): #Sum over big N for i
+        data_per_sim = len(data_dict[i+1].data)
+        for l in xrange(0, data_per_sim): #Sum over small n for l
+            for k in xrange(0, num_sims): #Sum over i,l for k
+                Ubias = 0.0
+                for ii in xrange(0, dim): #Along each dimension
+                    equ_dis = data_dict[k+1].equ_dis[ii]
+                    constr = data_dict[k+1].constr[ii]
+                    samp_dis = data_dict[i+1].data[l,ii]
+                    Ubias = Ubias + 0.5 * constr * (samp_dis - equ_dis)**2
+                Ubias = exp(-Ubias/KbT)
+                Ubiasl.append(Ubias)
+    return Ubiasl
+"""
 ###############################################################################
                               #The WHAM iteration
 ###############################################################################
@@ -337,19 +385,22 @@ def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv):
     plot_string_1D(last_num_imgs, dim, data_dict, final_i, final_t, react_paths, 'Last_string.pdf')
 
     #############################THE WHAM CODE#################################
+    #Get the biased potentials
+    #Ubiasl = get_Ubiasl(data_dict, num_sims, dim)
     Ubiasl = []
-    for i in xrange(0, num_sims):
+    for i in xrange(0, num_sims): #Sum over big N for i
         data_per_sim = len(data_dict[i+1].data)
-        for j in xrange(0, data_per_sim):
-            for k in xrange(0, num_sims):
+        for l in xrange(0, data_per_sim): #Sum over small n for l
+            for k in xrange(0, num_sims): #Sum over i,l for k
                 Ubias = 0.0
                 for ii in xrange(0, dim): #Along each dimension
                     equ_dis = data_dict[k+1].equ_dis[ii]
                     constr = data_dict[k+1].constr[ii]
-                    samp_dis = data_dict[i+1].data[j,ii]
+                    samp_dis = data_dict[i+1].data[l,ii]
                     Ubias = Ubias + 0.5 * constr * (samp_dis - equ_dis)**2
                 Ubias = exp(-Ubias/KbT)
                 Ubiasl.append(Ubias)
+    #return Ubiasl
 
     #WHAM iteration
     Fx_old = [0.0 for i in xrange(num_sims)]
@@ -366,11 +417,9 @@ def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv):
         expFx_old = [exp(i/KbT) for i in Fx_old]
 
         Fx = [0.0 for i in xrange(num_sims)] #Initial free energy
-        kk=0
+        kk=0 #A number to count
 
-        """
-        # The code from the WHAM paper
-
+        """#The code from the WHAM paper
         for k in xrange(0, num_sims):
             ebfk = 0.0
             for i in xrange(0, num_sims):
@@ -379,21 +428,22 @@ def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv):
                     bottom = 0.0
                     for j in xrange(0, num_sims):
                         bottom = Ubiasl[kk] * expFx_old[j]
-                    ebfk = ebfk + Ubiasl[kk]/bottom
-        """             
+                    ebfk = ebfk + Ubiasl[kk]/bottom"""
 
-        for i in xrange(0, num_sims): #Sum over big N
-            data_per_sim = len(data_dict[i+1].data) #Sum over little n
-            for j in xrange(0, data_per_sim): 
+        for i in xrange(0, num_sims): #Sum over big N for i
+            data_per_sim = len(data_dict[i+1].data) 
+            for l in xrange(0, data_per_sim): #Sum over little n for l
                 denom = 0.0 # Obtain the denominator
-                Ubiasl_k = []
-                for k in xrange(num_sims):
-                   denom = denom + expFx_old[k]*Ubiasl[kk]
-                   Ubiasl_k.append(Ubiasl[kk])
+                Ubiasl_j = []
+                for j in xrange(num_sims):
+                   data_per_sim2 = len(data_dict[j+1].data)
+                   #denom = denom + Ubiasl[kk] * expFx_old[j]
+                   denom = denom + float(data_per_sim2) * Ubiasl[kk] * expFx_old[j]
+                   Ubiasl_j.append(Ubiasl[kk])
                    kk = kk + 1
                 denom = 1.0/denom
                 for k in xrange(num_sims):
-                    Fx[k] = Fx[k] + Ubiasl_k[k] * denom
+                    Fx[k] = Fx[k] + Ubiasl_j[k] * denom
 
         #Get the updated probability
         Fx = [-KbT*log(Fx[i]) for i in xrange(num_sims)] #Transfer the probability into free energy
@@ -411,14 +461,15 @@ def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv):
             change = max(Fx_diff)
         iter = iter + 1
 
+    expFx = [exp(i/KbT) for i in Fx]
     write_list('Fx.dat', Fx, num_sims)
     write_list('Fx_prog.dat', Fx_prog, num_sims)
 
     cost_time = time.time() - start_time1
-
     print("%d Iterations were taken!" %(iter))
     print("It costs %f seconds to finish the WHAM cycle!" %cost_time)
-    return data_dict, num_sims, string_seq, Fx_old
+    
+    return data_dict, num_sims, string_seq, expFx, Ubiasl
 
 ###############################################################################
                                    #Examples
