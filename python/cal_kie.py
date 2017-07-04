@@ -1,24 +1,56 @@
 #!/home/pengfeil/AMBER/amber16/amber16/miniconda/bin/python
-# Filename: cal_kie.py
+# Filename: cal_kie_math.py
 from __future__ import print_function
 from math import exp, sqrt, gamma, pi
-from numpy import trapz
-from scipy.special import eval_genlaguerre as elag
+from os import popen
 from string_functions import read_list
+from numpy import trapz, inf, real
+from scipy.special import eval_genlaguerre as elag
+from scipy.special import kn
+from scipy.integrate import quad
+from scipy.misc import comb
 from matplotlib import pyplot as plt
+from optparse import OptionParser
 
-def cal_wfn(D, m1, m2, a, r, re, n):
+###############################################################################
+#                                    Functions
+###############################################################################
+def cal_Suv_math(coeff, u, v, xmass):
+    """Calculate the overlap integral square between donor-H and acceptor-H
+       wavefunctions based on the Mathmatica code"""
+
+    coeff = [str(i) for i in coeff]
+    u = str(u)
+    v = str(v)
+
+    #global omass, cmass
+    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+
+    if xmass < 2.0:
+        a = popen('cal_sij_h.m %s %s %s %s %s %s %s %s %s | awk \'{print $2}\''
+                  %(D_ch, beta_ch, D_oh, beta_oh, u, v, R, req_ch, req_oh)).read()
+    else:
+        a = popen('cal_sij_d.m %s %s %s %s %s %s %s %s %s | awk \'{print $2}\''
+                  %(D_ch, beta_ch, D_oh, beta_oh, u, v, R, req_ch, req_oh)).read()
+
+    if '*^' in a:
+        a = a.split('*^')
+        a = float(a[0]) * 10.0**(int(a[1]))
+
+    return float(a)
+
+def cal_wfn(D, m, a, r, re, n):
     """Calculate the wavefunction for Morse potential"""
 
     #Calculate the constant
-    c = (4.184 * 1000.0 / 6.022) * 1.660539040
+    c = (4.184 * 1000.0 / 6.0221409) * 1.660539040
     #                     *=10**-23  *=10**-27  *=10^-10
     c = sqrt(c)/1.0545718
     #           *=10**-34
     c = 0.1 * c
     #           as 10**-35 * 10**34 = 0.1
 
-    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
+    # 1 kcal/mol = 4.184*1000.0/6.0221409*10**-23
     # 1 u = 1.660539040*10**-27 #kg
     # hbar = 1.0545718*10**-34  #J*s
     # 1A^-1 = 10**10 m^-1
@@ -26,7 +58,7 @@ def cal_wfn(D, m1, m2, a, r, re, n):
 
     x = a*r
     xe = a*re
-    m = (m1 * m2) / (m1 + m2)
+    #m = (m1 * m2) / (m1 + m2)
     lamada = sqrt(2*m*D) * c / a
     z = 2.0 * lamada * exp(xe-x)
     b = lamada-n-0.5
@@ -34,18 +66,18 @@ def cal_wfn(D, m1, m2, a, r, re, n):
     psin = Nn * (z**b) * exp(-0.5 * z) * elag(n, 2.0*b, z)
     return psin
 
-def cal_wfn0(D, m1, m2, a, r, re):
+def cal_wfn0(D, m, a, r, re):
     """Calculate the ground-state wavefunction for Morse potential"""
 
     #Calculate the constant
-    c = (4.184 * 1000.0 / 6.022) * 1.660539040
+    c = (4.184 * 1000.0 / 6.0221409) * 1.660539040
     #                     *=10**-23  *=10**-27  *=10^-10
     c = sqrt(c)/1.0545718
     #           *=10**-34
     c = 0.1 * c
     #           as 10**-35 * 10**34 = 0.1
 
-    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
+    # 1 kcal/mol = 4.184*1000.0/6.0221409*10**-23
     # 1 u = 1.660539040*10**-27 #kg
     # hbar = 1.0545718*10**-34  #J*s
     # 1A^-1 = 10**10 m^-1
@@ -53,7 +85,7 @@ def cal_wfn0(D, m1, m2, a, r, re):
 
     x = a*r
     xe = a*re
-    m = (m1 * m2) / (m1 + m2)
+    #m = (m1 * m2) / (m1 + m2)
 
     lamada = sqrt(2*m*D) * c / a
     z = 2.0 * lamada * exp(xe-x)
@@ -63,44 +95,10 @@ def cal_wfn0(D, m1, m2, a, r, re):
     psi0 = factor * Nn * (z ** (lamada-0.5)) * exp(-0.5 * z)
     return psi0
 
-def cal_morse_ene(D, m1, m2, a, n):
-    """Calculate the eigen state energies for Morse potential"""
-
-    #Calculate the constant
-    c = (2.0 * 4.184 * 1000.0 / 6.022 * 1.0) / 1.660539040
-    #                         *=10**-23  *=10^20   *=10^27  *=10^24 in total
-    c = sqrt(c) * 1.0545718
-    #    *=10^12  *=10**-34 *=10**-22 in total
-
-    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
-    # 1A^-1 = 10**10 m^-1
-    # 1 u = 1.660539040*10**-27 #kg
-    # hbar = 1.0545718*10**-34  #J*s
-    # c has the unit of 1
-
-    m = (m1 * m2) / (m1 + m2)
-    homega = c * sqrt(2.0*D*(a**2)/m)*6.022*10.0/4184.0 #Transfer it back to kcal/mol
-    xe = homega/(4.0*D)
-    En = homega*((n+0.5)-xe*(n+0.5)**2)
-    return En
-
-def norm_prob(ene_list):
-    """Normalized the probablity based on Boltzmann distribution"""
-    global T
-
-    ene0 = min(ene_list)
-    ene_list2 = [i - ene0 for i in ene_list]
-    k = 1.38065 * 6.022 #J/K
-    k = k/4184.0 #kcal/(mol*K)
-    prob = [exp(-i/(k*T)) for i in ene_list2]
-    probsum = sum(prob)
-    prob = [i/probsum for i in prob]
-    return prob
-
-def cal_Suv(coeff, u, v, xmass):
+def cal_Suv_trapz(coeff, u, v, xmass):
     """Calculate the overlap integral square between donor-H and acceptor-H wavefunctions"""
 
-    global omass, cmass
+    #global omass, cmass
     R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
 
     #The region to be integrated for x which is rCH-rOH
@@ -115,98 +113,324 @@ def cal_Suv(coeff, u, v, xmass):
         x = float(i) * dxval
         #U_ch = D_ch * ((1.0 - exp(-1.0*beta_ch*(R/2.0+x/2.0-req_ch)))**2)  #rCH = R/2 + x/2
         #U_oh = D_oh * ((1.0 - exp(-1.0*beta_oh*(R/2.0-x/2.0-req_oh)))**2) + delta  #rOH = R/2 - x/2
-        psich = cal_wfn(D_ch, cmass, xmass, beta_ch, R/2.0+x/2.0, req_ch, u)
-        psioh = cal_wfn(D_oh, omass, xmass, beta_oh, R/2.0-x/2.0, req_oh, v)
+        psich = cal_wfn(D_ch, xmass, beta_ch, R/2.0+x/2.0, req_ch, u)
+        psioh = cal_wfn(D_oh, xmass, beta_oh, R/2.0-x/2.0, req_oh, v)
         overlap_list.append(psich*psioh)
     Suv = trapz(overlap_list, dx=dxval)
     #print('%7.1f %d %d %10.4e' %(R, u, v, Suv))
     return Suv
 
-def cal_kuv_R(coeff, u, v, xmass):
-    """Calculate the kuv for R"""
+def cal_Suv_Sym(D, m, a, R, u, v):
 
-    global omass, cmass, T
+    """Referred from equation 3.5 in the following paper:
+    Anharmonicity effects in atom group transfer processes in condensed phases.
+    Journal of the Chemical Society, Faraday Transactions 2:
+    Molecular and Chemical Physics 1978, 74, 1690-1701.
+
+    However, there is about 1000.0 times of bug from the numerical results,
+    which may comes from a coefficient calculation.
+    Also, it assumes we have the same beta values for DH and AH
+    """
+
+    #Calculate the constant
+    c = (4.184 * 1000.0 / 6.0221409) * 1.660539040 
+    #                     *=10^-23  *=10^-27  [*=10^-50 J*kg]
+    c = sqrt(c)/1.0545718
+    #           *=10^34 sqrt(J*kg)*m/(J*s)
+    c = 0.1 * c
+    #           as 10^-25 * 10^34 * 10^-10 = 0.1
+
+    lamada = sqrt(2.0*m*D) * c / a #unitless
+    p = 2.0*lamada-1.0
+    temp_fac0 = ((p-2.0*u)*(p-2.0*v)*((p+1.0)**(2.0*p))) / (gamma(u+1.0)*gamma(p+1.0-u)*gamma(v+1.0)*gamma(p+1.0-v))
+
+    Suv_pre = 0.0
+    for l in xrange(0, u+1):
+        for k in xrange(0, v+1):
+            temp_fac1 = (-1)**(k+l) * comb(u, l) * comb(v, k)
+            temp_fac2 = gamma(p+1.0-u)*gamma(p+1.0-v) / (gamma(p+1.0-u-l)*gamma(p+1.0-v-k))
+            temp_fac3 = (p+1.0)**(-(l+k))
+            temp_fac4 = (p+1.0)*exp(-a*R/2.0)
+            temp_fac5 = exp(-a*R*(p-l-k)/2.0)*kn(abs(l-k),temp_fac4)
+            temp_fac6 = temp_fac1 * temp_fac2 * temp_fac3 * temp_fac5
+            Suv_pre += temp_fac6
+
+    Suv = 4.0 * temp_fac0 * (Suv_pre**2)
+    return Suv
+
+def integer(x, k1, k2, y1, y2, a):
+    return x**(k1+a*k2-1.0)*exp(-1.0/2.0*(y1*x+y2*(x**a)))
+
+def cal_Suv(coeff, v1, v2, xmass):
+    """Calculate the overlap integral square between donor-H and acceptor-H
+       wavefunctions based on python code"""
+    """From equation 20 and Appendix A of International journal of
+       quantum chemistry 2002, 88 (2), 280-295."""
+
     R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
 
-    #Calculate the vibrational state energies for u and v
-    Eu = cal_morse_ene(D_ch, cmass, xmass, beta_ch, u)
-    Ev = cal_morse_ene(D_oh, omass, xmass, beta_oh, v)
+    #Calculate the constant
+    c1 = (4.184 * 1000.0 / 6.0221409) * 1.660539040
+    #                     *=10^-23  *=10^-27  [*=10^-50 J*kg]
+    c1 = sqrt(c1)/1.0545718
+    #           *=10^34 sqrt(J*kg)*m/(J*s)
+    c1 = 0.1 * c1
+    #           as 10^-25 * 10^34 * 10^-10 = 0.1
 
-    #Calculate the overlap integral Suv
-    Suv = cal_Suv(coeff, u, v, xmass)
+    # 1 kcal/mol = 4.184*1000.0/6.0221409*10**-23
+    # 1 u = 1.660539040*10**-27 #kg
+    # hbar = 1.0545718*10**-34  #J*s
+    # 1A^-1 = 10**10 m^-1
+    # c has the unit of 1
+
+    #
+    # In front of the summation
+    #
+    lamada1 = sqrt(2.0*xmass*D1) * c1 / beta1
+    lamada2 = sqrt(2.0*xmass*D2) * c1 / beta2
+    j1 = lamada1 - 0.5
+    j2 = lamada2 - 0.5
+    a = beta2/beta1
+
+    # Factor 0
+    N1 = sqrt((gamma(v1+1.0)*2.0*(j1-v1))/(gamma(2*(j1+0.5)-v1)))
+    N2 = sqrt((gamma(v2+1.0)*2.0*(j2-v2))/(gamma(2*(j2+0.5)-v2)))
+    fac0a = N1*N2*sqrt(a)
+
+    y1 = (2*j1+1.0)*exp(-beta1*(R/2.0))
+    y2 = (2*j2+1.0)*exp(-beta2*(R/2.0))
+
+    fac0b = (y1**(j1-v1)) * (y2**(j2-v2))
+    fac0 = fac0a*fac0b
+
+    #
+    # For the summation
+    #
+    fcsum = 0.0
+    for l1 in xrange(0, v1+1):
+        for l2 in xrange(0, v2+1):
+            fac1 = (-1)**(l1+l2) / (gamma(l1+1)*gamma(l2+1))
+            fac2 = comb(2*j1-v1, v1-l1) * comb(2*j2-v2, v2-l2)
+            fac3a = ((2*j1+1.0)**l1) * ((2*j2+1.0)**l2)
+
+            fac3b = exp(-beta1*(R/2.0)*l1) * exp(-beta2*(R/2.0)*l2)
+
+            fac3 = fac3a * fac3b
+            fcaux = fac0 * fac1 * fac2 * fac3
+            #
+            # For integration
+            #
+            k1 = j1-v1+l1
+            k2 = j2-v2+l2
+
+            res = quad(integer, 0.0, inf, args=(k1, k2, y1, y2, -a))
+            fcsum += fcaux*res[0]
+
+    fcsum = real(fcsum)
+    return fcsum
+
+def cal_morse_ene(D, m, a, n):
+    """Calculate the eigen state energies for Morse potential based on python"""
+
+    #Calculate the constant
+    c = (2.0 * 4.184 * 1000.0 / 6.0221409 * 1.0) / 1.660539040
+    #                         *=10^-23   *=10^20   *=10^27  *=10^24 in total
+    c = sqrt(c) * 1.0545718
+    #    *=10^12  *=10**-34 *=10**-22 in total
+
+    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
+    # 1A^-1 = 10**10 m^-1
+    # 1 u = 1.660539040*10**-27 #kg
+    # hbar = 1.0545718*10**-34  #J*s
+    # c has the unit of 1
+
+    #m = (m1 * m2) / (m1 + m2)
+    homega = c * sqrt(2.0*D*(a**2)/m)*6.022*10.0/4184.0 #Transfer it back to kcal/mol
+    xe = homega/(4.0*D)
+    En = homega*((n+0.5)-xe*(n+0.5)**2)
+    return En
+
+def cal_morse_ene_math(D, m, a, n):
+    """Calculate the eigen state energies for Morse potential from the Mathmatica code"""
+
+    D = str(D)
+    a = str(a)
+    n = str(n)
+
+    if m < 2.0:
+        En = popen('cal_morse_ene_h.m %s %s %s | awk \'{print $2}\'' %(D, a, n)).read()
+    else:
+        En = popen('cal_morse_ene_d.m %s %s %s | awk \'{print $2}\'' %(D, a, n)).read()
+
+    if '*^' in En:
+        En = En.split('*^')
+        En = float(En[0]) * 10.0**(int(En[1]))
+    else:
+        En = float(En)
+
+    return En
+
+def norm_prob(ene_list):
+
+    """Normalized the probablity based on Boltzmann distribution"""
+    global T, kb
+
+    ene0 = min(ene_list)
+    ene_list2 = [i - ene0 for i in ene_list]
+    prob = [exp(-i/(kb*T)) for i in ene_list2]
+    probsum = sum(prob)
+    prob = [i/probsum for i in prob]
+    return prob
+
+def cal_kuv_R(coeff, u, v, xmass, cmode):
+    """Calculate the kuv for R"""
+
+    global T, kb
+
+    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+
+    # Calculate the vibrational state energies for u and v
+    # and calculate the overlap integral Suv
+    if cmode == 'python':
+        Eu = cal_morse_ene(D_ch, xmass, beta_ch, u)
+        Ev = cal_morse_ene(D_oh, xmass, beta_oh, v)
+        Suv = cal_Suv(coeff, u, v, xmass)
+    elif cmode == 'math':
+        Eu = cal_morse_ene_math(D_ch, xmass, beta_ch, u)
+        Ev = cal_morse_ene_math(D_oh, xmass, beta_oh, v)
+        Suv = cal_Suv_math(coeff, u, v, xmass)
 
     #Calculate the rate constat for kuv for R
     lamb = 13.4 #kcal/mol, re-oragnization energy
-    k = 1.38065 * 6.022 #J/K 10^-23 * 10^23 = 1.0
-    k = k / 4184.0 #kcal/(mol*K)
     hbar = 1.0545718 #*10**-34  #J*s
-    hbar = hbar * 6.022 / 4184.0 #*10^-11 kcal/mol*s
-    c = (1.0/hbar) * (V_el**2) * sqrt(pi/(lamb*k*T)) #*10^11 s^-1
-    dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*k*T) #unitless
-    kuv_R = c * (1.0 / hbar) * (V_el**2) * sqrt(pi/(lamb*k*T)) * (Suv**2) * exp(-dGuv) #unit 10^11 s^-1
+    hbar = hbar * 6.0221409 / 4184.0 #*10^-11 kcal/mol*s
+    c = (1.0/hbar) * (V_el**2) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
+    c = c * (1.0 / hbar) * (V_el**2) * sqrt(pi/(lamb*kb*T))
+
+    dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
+    kuv_R = c * (Suv**2) * exp(-dGuv) #unit 10^11 s^-1
     kuv_R = kuv_R * (10.0**11) #unit s^-1
     return kuv_R
 
-def cal_kR(coeff, umax, vmax, xmass):
+def cal_kR(coeff, umax, vmax, xmass, cmode):
     """Calculate the k for R, up to umax and vmax"""
 
-    global cmass
+    #global cmass
     R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
 
     #Calculate the eigen energy states
-    Eu_list = [cal_morse_ene(D_ch, cmass, xmass, beta_ch, u) for u in xrange(0, umax+1)]
+    if cmode == 'math':
+        Eu_list = [cal_morse_ene_math(D_ch, xmass, beta_ch, u) for u in xrange(0, umax+1)]
+    elif cmode == 'python':
+        Eu_list = [cal_morse_ene(D_ch, xmass, beta_ch, u) for u in xrange(0, umax+1)]
 
     #Normalize the probabilities
     Pu = norm_prob(Eu_list)
     k_R = 0.0
     for u in xrange(0, umax+1):
         for v in xrange(0, vmax+1):
-            kuv_R = cal_kuv_R(coeff, u, v, xmass)
+            kuv_R = cal_kuv_R(coeff, u, v, xmass, cmode)
             k_R += Pu[u] * kuv_R
     return k_R
 
-#
-#Constant
-#
+def read_para_file(fname):
+    para_list = []
+    readf = open(fname)
+    for rline in readf:
+        rline = rline.strip('\n')
+        line = rline.split()
+        line = [float(i) for i in line]
+        para_list.append(line)
+    readf.close()
+    return para_list
+
+parser = OptionParser("Usage: cal_kie_math.py -f R1_free_ene_file -c code_mode -m Morse_mode")
+parser.add_option("-f", dest="r1fef", type='string',
+                  help="R1 free energy file")
+parser.add_option("-c", dest="cmode", type='string',
+                  help="Code mode (math or python)")
+parser.add_option("-p", dest="pmode", type='int',
+                  help="Morse potential mode")
+(options, args) = parser.parse_args()
+
+###############################################################################
+#                                    Constants
+###############################################################################
+
 T = 300.0 #K
-omass = 15.9994
-cmass = 12.0107
-hmass = 1.007825
-dmass = 2.014102
+kb = 1.380649 * 6.0221409 #J/K 10^-23 * 10^23 = 1.0
+kb = kb / 4184.0 #kcal/(mol*K)
 
-#
-#Parameters
-#
-R=2.77
-req_ch=1.09
-req_oh=0.96
+omass = 15.999
+cmass = 12.000
+hmass = 1.0072756064562605
+dmass = 2.0135514936645316
 
-beta_ch=2.0680
-beta_oh=2.4420
-#for CH, 2900 cm^-1 is an experimental value
-#D_ch = (2900.0/(beta_ch*153.467))**2 * ((cmass*hmass)/(cmass+hmass))
-#3500 cm^-1 is an experimental value
-#D_oh = (3500.0/(beta_oh*153.467))**2 * ((omass*hmass)/(omass+hmass))
 
-D_ch = 77.0
-D_oh = 82.0
-#beta_ch = (2900.0 / (sqrt(D_ch / ((cmass*hmass)/(cmass+hmass))))) /  153.467
-#beta_oh = (3500.0 / (sqrt(D_oh / ((omass*hmass)/(omass+hmass))))) /  153.467
+###############################################################################
+#                                    Parameters
+###############################################################################
 
-dG0 = -5.4 #kcal/mol
-V_el = 4.5 #kcal/mol
+if options.pmode == 1: #Use the default Morse parameters
+    R=2.77
+    req_ch=1.09
+    req_oh=0.96
 
-#
-#Calculation the KIE
-#
-umax = 2
-vmax = 2
-R_list = read_list('R1.pdf.free_energy', 1)
-dR = R_list[1] - R_list[0]
-WR_list = read_list('R1.pdf.free_energy', 2)
-PR_list = norm_prob(WR_list)
+    beta_ch=2.0680
+    beta_oh=2.4420
+    #for CH, 2900 cm^-1 is an experimental value
+    #D_ch = (2900.0/(beta_ch*153.467))**2 * ((cmass*hmass)/(cmass+hmass))
+    #3500 cm^-1 is an experimental value
+    #D_oh = (3500.0/(beta_oh*153.467))**2 * ((omass*hmass)/(omass+hmass))
+
+    D_ch = 77.0
+    D_oh = 82.0
+    #beta_ch = (2900.0 / (sqrt(D_ch / ((cmass*hmass)/(cmass+hmass))))) /  153.467
+    #beta_oh = (3500.0 / (sqrt(D_oh / ((omass*hmass)/(omass+hmass))))) /  153.467
+    #beta_ch = (2900.0 / (sqrt(D_ch / hmass))) /  153.467
+    #beta_oh = (3500.0 / (sqrt(D_oh / hmass))) /  153.467
+
+    dG0 = -5.4 #kcal/mol
+    V_el = 4.5 #kcal/mol
+
+elif options.pmode == 2: #Read the Morse parameters
+    para_list = read_para_file('morse_para.txt')
+
+###############################################################################
+#                                    Parameters
+###############################################################################
 
 """
+print('%4s' %'R', end='')
+for u in xrange(0, umax+1):
+    for v in xrange(0, vmax+1):
+        print('%14s' %('S'+str(u)+str(v)), end='')
+print('')
+
+for i in range(26, 27):
+    R = float(i)*0.1
+    print('%4.1f' %R, end='')
+    for u in xrange(0, umax+1):
+        for v in xrange(0, vmax+1):
+                coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
+                Suv = cal_Suv(coeff, u, v, hmass)
+                print('%14.6e' %Suv, end='')
+    print('')
+"""
+
+###############################################################################
+#                                  Main program
+###############################################################################
+#
+# Read the W(R) list
+#
+R_list = read_list(options.r1fef, 1)
+dR = R_list[1] - R_list[0]
+WR_list = read_list(options.r1fef, 2)
+PR_list = norm_prob(WR_list)
+umax = 2
+vmax = 2
+
 #
 #Calculate the KIE value
 #
@@ -214,28 +438,21 @@ k_h = 0.0
 k_d = 0.0
 
 for i in xrange(0, len(R_list)):
+
     R = R_list[i]
-    coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
-    kR_h = cal_kR(coeff, umax, vmax, hmass)
-    kR_d = cal_kR(coeff, umax, vmax, dmass)
+    if options.pmode == 1:
+        coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
+    elif options.pmode == 2:
+        coeff = para_list[i]
+
+    kR_h = cal_kR(coeff, umax, vmax, hmass, options.cmode)
+    kR_d = cal_kR(coeff, umax, vmax, dmass, options.cmode)
     k_h += kR_h * PR_list[i] * dR
     k_d += kR_d * PR_list[i] * dR
+    print(R, kR_h * PR_list[i] * dR, kR_d * PR_list[i] * dR)
 
 kie = k_h/k_d
-#print("%10.4e" %kie)
-"""
-
-#
-#For test the overlap intergral calculation
-#
-print('     R  u v Suv')
-for i in range(26, 27):
-    R = float(i)*0.1
-    for u in xrange(0, umax+1):
-        for v in xrange(0, vmax+1):
-                coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
-                Suv = cal_Suv(coeff, u, v, hmass)
-                print('%7.1f %d %d %10.4e' %(R, u, v, Suv))
+print("%7.1e" %kie)
 
 quit()
 
