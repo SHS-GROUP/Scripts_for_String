@@ -1,8 +1,8 @@
 #!/home/pengfeil/AMBER/amber16/amber16/miniconda/bin/python
-# Filename: cal_kie_math.py
+# Filename: cal_kie.py
 from __future__ import print_function
 from math import exp, sqrt, gamma, pi
-from os import popen
+from os import popen, system
 from string_functions import read_list
 from numpy import trapz, inf, real
 from scipy.special import eval_genlaguerre as elag
@@ -10,7 +10,11 @@ from scipy.special import kn
 from scipy.integrate import quad
 from scipy.misc import comb
 from matplotlib import pyplot as plt
+from matplotlib import rc
 from optparse import OptionParser
+
+system("module load mathematica/mathematica-11")
+system("cp ~/Projs/PCET_code/MathPCETwithET.m .")
 
 ###############################################################################
 #                                    Functions
@@ -40,6 +44,8 @@ def cal_Suv_math(coeff, u, v, xmass):
     return float(a)
 
 def cal_wfn(D, m, a, r, re, n):
+    #NOT USED!
+
     """Calculate the wavefunction for Morse potential"""
 
     #Calculate the constant
@@ -67,6 +73,8 @@ def cal_wfn(D, m, a, r, re, n):
     return psin
 
 def cal_wfn0(D, m, a, r, re):
+    #NOT USED!
+
     """Calculate the ground-state wavefunction for Morse potential"""
 
     #Calculate the constant
@@ -96,14 +104,15 @@ def cal_wfn0(D, m, a, r, re):
     return psi0
 
 def cal_Suv_trapz(coeff, u, v, xmass):
+    #NOT USED!
     """Calculate the overlap integral square between donor-H and acceptor-H wavefunctions"""
 
     #global omass, cmass
     R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
 
     #The region to be integrated for x which is rCH-rOH
-    xmin = -2.0
-    xmax = 2.0
+    xmin = -10.0
+    xmax = 10.0
     dxval = 0.01
     xlb = int(xmin / dxval)
     xub = int(xmax / dxval)
@@ -121,6 +130,7 @@ def cal_Suv_trapz(coeff, u, v, xmass):
     return Suv
 
 def cal_Suv_Sym(D, m, a, R, u, v):
+    #NOT USED!
 
     """Referred from equation 3.5 in the following paper:
     Anharmonicity effects in atom group transfer processes in condensed phases.
@@ -167,7 +177,8 @@ def cal_Suv(coeff, v1, v2, xmass):
     """From equation 20 and Appendix A of International journal of
        quantum chemistry 2002, 88 (2), 280-295."""
 
-    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    R = R - req_ch - req_oh
 
     #Calculate the constant
     c1 = (4.184 * 1000.0 / 6.0221409) * 1.660539040
@@ -233,10 +244,11 @@ def cal_morse_ene(D, m, a, n):
     """Calculate the eigen state energies for Morse potential based on python"""
 
     #Calculate the constant
-    c = (2.0 * 4.184 * 1000.0 / 6.0221409 * 1.0) / 1.660539040
+    c1 = (2.0 * 4.184 * 1000.0 / 6.0221409 * 1.0) / 1.660539040
     #                         *=10^-23   *=10^20   *=10^27  *=10^24 in total
-    c = sqrt(c) * 1.0545718
+    c1 = sqrt(c1) * 1.0545718
     #    *=10^12  *=10**-34 *=10**-22 in total
+    c1 = c1 * 0.1
 
     # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
     # 1A^-1 = 10**10 m^-1
@@ -245,9 +257,12 @@ def cal_morse_ene(D, m, a, n):
     # c has the unit of 1
 
     #m = (m1 * m2) / (m1 + m2)
-    homega = c * sqrt(2.0*D*(a**2)/m)*6.022*10.0/4184.0 #Transfer it back to kcal/mol
-    xe = homega/(4.0*D)
-    En = homega*((n+0.5)-xe*(n+0.5)**2)
+    lamada = sqrt(2.0*m*D) * c1 / a
+
+    c2 = 1.0545718 * sqrt(4184.0/(6.0221409*1.660539040)) * 10.0
+    homega = c2 * sqrt(2.0*D*(a**2)/m) * 6.0221409 / 4184.0 #Transfer it back to kcal/mol
+
+    En = homega*((n+0.5)-(1.0/(2.0*lamada))*(n+0.5)**2)
     return En
 
 def cal_morse_ene_math(D, m, a, n):
@@ -258,8 +273,10 @@ def cal_morse_ene_math(D, m, a, n):
     n = str(n)
 
     if m < 2.0:
+        #system('cal_morse_ene_h.m %s %s %s' %(D, a, n))
         En = popen('cal_morse_ene_h.m %s %s %s | awk \'{print $2}\'' %(D, a, n)).read()
     else:
+        #system('cal_morse_ene_d.m %s %s %s' %(D, a, n))
         En = popen('cal_morse_ene_d.m %s %s %s | awk \'{print $2}\'' %(D, a, n)).read()
 
     if '*^' in En:
@@ -356,6 +373,17 @@ parser.add_option("-p", dest="pmode", type='int',
 ###############################################################################
 #                                    Constants
 ###############################################################################
+#WT_HT_list = [3.5971, 3.5336, 3.4722, 3.4130, 3.3557, 3.3003, 3.2468, 3.1949, 3.1447, 3.0960]
+WT_HT_list = [3.5971, 3.5336, 3.4722, 3.3557, 3.3003, 3.2468, 3.1949, 3.1447]
+WT_HT_list = [1000.0/i for i in WT_HT_list]
+WT_Hrate_list = [213.35, 228.94, 269.96, 327.19, 297.11, 329.06, 301.77, 348.08]
+#WT_Hrate_list = [213.35, 228.94, 269.96, 275.10, 327.19, 297.11, 329.06, 301.77, 348.08, 327.51]
+
+WT_DT_list = [3.5971, 3.5336, 3.4722, 3.3557, 3.3003, 3.2468, 3.1949, 3.1447]
+WT_DT_list = [1000.0/i for i in WT_DT_list]
+WT_Drate_list = [2.161, 2.4767, 2.9864, 4.2919, 3.6822, 5.023, 4.2442, 4.0017]
+
+WT_KIE_list = [WT_Hrate_list[i]/WT_Drate_list[i] for i in xrange(len(WT_Hrate_list))]
 
 T = 300.0 #K
 kb = 1.380649 * 6.0221409 #J/K 10^-23 * 10^23 = 1.0
@@ -365,7 +393,6 @@ omass = 15.999
 cmass = 12.000
 hmass = 1.0072756064562605
 dmass = 2.0135514936645316
-
 
 ###############################################################################
 #                                    Parameters
@@ -397,10 +424,24 @@ elif options.pmode == 2: #Read the Morse parameters
     para_list = read_para_file('morse_para.txt')
 
 ###############################################################################
-#                                    Parameters
+#                                    Tests
 ###############################################################################
 
 """
+coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
+u = 0
+v = 0
+hmass = 1.0072756064562605
+
+a0 = cal_Suv_trapz(coeff, u, v, hmass)
+a1 = cal_Suv_math(coeff, u, v, hmass)
+a2 = cal_Suv(coeff, u, v, hmass)
+print(a0, a1, a2)
+
+b1 = cal_morse_ene_math(D_ch, hmass, beta_ch, 0)
+b2 = cal_morse_ene(D_ch, hmass, beta_ch, 0)
+print(b1, b2)
+
 print('%4s' %'R', end='')
 for u in xrange(0, umax+1):
     for v in xrange(0, vmax+1):
@@ -421,6 +462,8 @@ for i in range(26, 27):
 ###############################################################################
 #                                  Main program
 ###############################################################################
+Q = 100.0 #The parition function parameter
+
 #
 # Read the W(R) list
 #
@@ -431,28 +474,53 @@ PR_list = norm_prob(WR_list)
 umax = 2
 vmax = 2
 
-#
-#Calculate the KIE value
-#
-k_h = 0.0
-k_d = 0.0
+Hrate_vsT = []
+Drate_vsT = []
+KIE_vsT = []
 
-for i in xrange(0, len(R_list)):
+for i in xrange(len(WT_HT_list)):
+    T = WT_HT_list[i]
+    #
+    #Calculate the KIE value
+    #
+    k_h_list = []
+    k_d_list = []
+    for j in xrange(0, len(R_list)):
+        R = R_list[j]
+        if options.pmode == 1:
+            coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
+        elif options.pmode == 2:
+            coeff = para_list[i]
+ 
+        kR_h = cal_kR(coeff, umax, vmax, hmass, options.cmode)
+        kR_d = cal_kR(coeff, umax, vmax, dmass, options.cmode)
+        k_h_list.append(kR_h * PR_list[j] * dR * 1.0/Q)
+        k_d_list.append(kR_d * PR_list[j] * dR * 1.0/Q)
 
-    R = R_list[i]
-    if options.pmode == 1:
-        coeff = [R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el]
-    elif options.pmode == 2:
-        coeff = para_list[i]
+    k_h = sum(k_h_list)
+    k_d = sum(k_d_list)
+    kie = k_h/k_d
+    print('%7.3e %7.3e %7.3e %7.3e' %(T, k_h, k_d, kie))
 
-    kR_h = cal_kR(coeff, umax, vmax, hmass, options.cmode)
-    kR_d = cal_kR(coeff, umax, vmax, dmass, options.cmode)
-    k_h += kR_h * PR_list[i] * dR
-    k_d += kR_d * PR_list[i] * dR
-    print(R, kR_h * PR_list[i] * dR, kR_d * PR_list[i] * dR)
+    Hrate_vsT.append(k_h)
+    Drate_vsT.append(k_d)
+    KIE_vsT.append(kie)
 
-kie = k_h/k_d
-print("%7.1e" %kie)
+    #print("Percentages:")
+    #for j in xrange(0, len(R_list)):
+    #    print('%6.3f %5.2f %5.2f' %(R_list[j], 100.0 * k_h_list[j]/k_h, 100.0 * k_d_list[j]/k_d))
+
+plt.plot(WT_HT_list, Hrate_vsT, 'rx', label='Hrate-Cal.', linewidth=2.0)
+plt.plot(WT_HT_list, WT_Hrate_list, 'ro', label='Hrate-Exp.', linewidth=2.0)
+plt.plot(WT_DT_list, Drate_vsT, 'gx', label='Drate-Cal.', linewidth=2.0)
+plt.plot(WT_DT_list, WT_Drate_list, 'go', label='Drate-Exp.', linewidth=2.0)
+plt.plot(WT_DT_list, KIE_vsT, 'bx', label='KIE-Cal.', linewidth=2.0)
+plt.plot(WT_DT_list, WT_KIE_list, 'bo', label='KIE-Exp.', linewidth=2.0)
+plt.legend(bbox_to_anchor=(0.7, 0.7), loc=2, borderaxespad=0.)
+plt.xlabel('Temperature (K)')
+plt.ylabel(r'Rate($s_-1$)/KIE')
+plt.savefig('Temp_depen.pdf', dpi=300.0)
+plt.close()
 
 quit()
 
