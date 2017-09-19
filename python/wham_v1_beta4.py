@@ -5,7 +5,9 @@ from numpy import average, std, arange
 from numpy import array, matrix, exp, log, linspace, histogram, transpose
 import matplotlib.pyplot as plt
 import time
-from string_functions import window_data, get_color_dict, write_list, write_xy_lists, read_dat_file, get_rc_data_1D, read_list
+from string_functions import (window_data, get_color_dict, write_list,
+             write_xy_lists, read_dat_file, get_rc_data_1D, read_list)
+from random import seed, randint
 
 KbT = 0.596 #Energy unit, which is a global variable
 
@@ -36,10 +38,10 @@ def get_Ubiasl(data_dict, num_sims, dim):
                 Ubiasl.append(Ubias)
 
     # Write into a file
-    w_file = open('expUbiasl.txt', 'w')
-    for i in xrange(len(Ubiasl)):
-         print("%16.7e" %Ubiasl[i], file=w_file)
-    w_file.close()
+    #w_file = open('expUbiasl.txt', 'w')
+    #for i in xrange(len(Ubiasl)):
+    #     print("%16.7e" %Ubiasl[i], file=w_file)
+    #w_file.close()
 
     return Ubiasl
 
@@ -125,6 +127,12 @@ def wham_iter(num_sims, wham_conv, data_dict, Ubiasl):
 #                    The first part is about each window
 ###############################################################################
 def plot_wind_avg(x_list, avg_val, xlabel, ylabel, figname):
+
+    w_file = open(figname + '.free_energy', 'w')
+    for i in xrange(len(x_list)):
+        print("%7.3f %12.7e" %(x_list[i], avg_val[i]), file=w_file)
+    w_file.close()
+
     plt.plot(x_list, avg_val, linestyle='-')
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -203,33 +211,51 @@ def plot_string_1D(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, 
     plt.savefig(figname)
     plt.close()
 
-def plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label, avg=0):
+def plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label, avg=0, count=0):
 
     global KbT
 
-    if avg in [0, 2]:
-        # Convert the probability into free energy
-        free_ene_RC = [0.0 for i in xrange(num_bins)]
-        for i in xrange(num_bins):
-            free_ene_RC[i] = -KbT*log(Prob_RC[i])
-    elif avg == 1:
-        free_ene_RC = Prob_RC
+    if count == 0:
+        if avg in [0, 2]:
+            # Convert the probability into free energy
+            free_ene_RC = [0.0 for i in xrange(num_bins)]
+            for i in xrange(num_bins):
+                free_ene_RC[i] = -KbT*log(Prob_RC[i])
+        elif avg == 1:
+            free_ene_RC = Prob_RC
+ 
+        # Scale
+        min_free_ene = min(free_ene_RC)
+        free_ene_RC = [free_ene - min_free_ene for free_ene  in free_ene_RC]
+ 
+        # Print out the free energy
+        write_xy_lists(figname + '.free_energy', xaxis_RC, free_ene_RC)
 
-    # Scale
-    min_free_ene = min(free_ene_RC)
-    free_ene_RC = [free_ene - min_free_ene for free_ene  in free_ene_RC]
+        # Plot out the free energy
+        plt.plot(xaxis_RC, free_ene_RC, 'k-')
+        plt.ylabel('Free Energy (kcal/mol)')
+        plt.xlabel(rc_label)
+        plt.savefig(figname, dpi=900)
+        plt.close()
 
-    # Print out the free energy
-    write_xy_lists(figname + '.free_energy', xaxis_RC, free_ene_RC)
+    else:
 
-    # Plot out the free energy
-    plt.plot(xaxis_RC, free_ene_RC, 'k-')
-    plt.ylabel('Free Energy (kcal/mol)')
-    plt.xlabel(rc_label)
-    plt.savefig(figname, dpi=900)
-    plt.close()
+        # Check the sample number
+        n_sample = sum(Prob_RC)
+        print('Axis %s has %10d sampled!' %(rc_label, n_sample))
 
-def gene_free_ene_1D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml, coefl, num_bins, figname, rc_label, avg=0, tot_ene=[], ene1=[]):
+        # Print out the count
+        write_xy_lists(figname + '.txt', xaxis_RC, Prob_RC, 1)
+
+        # Plot out the free energy
+        plt.plot(xaxis_RC, Prob_RC, 'k-')
+        plt.ylabel('Count')
+        plt.xlabel(rc_label)
+        plt.savefig(figname, dpi=900)
+        plt.close()
+
+def gene_free_ene_1D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml, coefl, num_bins,
+                     figname, rc_label, avg=0, tot_ene=[], ene1=[]):
     """The part is from eqs 10 and 11 in the WHAM paper"""
 
     data_RC, bins_RC, xaxis_RC = get_rc_data_1D(data_dict, num_sims, rc_diml, coefl, num_bins)
@@ -263,6 +289,7 @@ def gene_free_ene_1D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml, coefl, nu
                              'provide total energy list as well!')
 
     # Generate the free energy for each bin
+    Prob_RCN = [0 for i in xrange(num_bins)]
     Prob_RC0 = [0.0 for i in xrange(num_bins)]
     Prob_RC1 = [0.0 for i in xrange(num_bins)]
 
@@ -291,10 +318,13 @@ def gene_free_ene_1D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml, coefl, nu
                     data_per_sim2 = len(data_dict[k+1].data)
                     denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
  
+                Prob_RCN[count_indx] = Prob_RCN[count_indx] + 1
                 Prob_RC0[count_indx] = Prob_RC0[count_indx] + 1.0/denom
                 count = count + 1
 
-        plot_free_ene_1D(num_bins, Prob_RC0, xaxis_RC, figname, rc_label, 0)
+        plot_free_ene_1D(num_bins, Prob_RCN, xaxis_RC, figname + '.count.pdf', rc_label, 0, 1)
+        plot_free_ene_1D(num_bins, Prob_RC0, xaxis_RC, figname, rc_label, avg)
+
     else:
         for i in xrange(0, num_sims): #Sum over big N for i
             data_per_sim = len(data_dict[i+1].data)
@@ -317,11 +347,13 @@ def gene_free_ene_1D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml, coefl, nu
                     data_per_sim2 = len(data_dict[k+1].data)
                     denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
  
+                Prob_RCN[count_indx] = Prob_RCN[count_indx] + 1
                 Prob_RC0[count_indx] = Prob_RC0[count_indx] + 1.0/denom
                 Prob_RC1[count_indx] = Prob_RC1[count_indx] + data_list[count]/denom
                 count = count + 1
 
         Prob_RC2 = [Prob_RC1[i]/Prob_RC0[i] for i in xrange(num_bins)]
+        plot_free_ene_1D(num_bins, Prob_RCN, xaxis_RC, figname + '.count.pdf', rc_label, 0, 1)
         plot_free_ene_1D(num_bins, Prob_RC2, xaxis_RC, figname, rc_label, avg)
 
 ###############################################################################
@@ -393,69 +425,113 @@ def plot_string_free_energy(free_ene_RC12, fin_crd, xaxis_RC1, xaxis_RC2, num_bi
     plt.savefig(figname + '.free_ene.pdf', dpi=900)
     plt.close()
 
-def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname, xlabel1, xlabel2, colmap, ini_crd=[], fin_crd=[], avg=0):
+def plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12, figname,
+                     xlabel1, xlabel2, colmap, ini_crd=[], fin_crd=[], avg=0, count=0):
 
     global KbT
 
-    if avg in [0, 2]:
-        # Convert the probability into free energy
-        free_ene_RC12 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
+    if count == 0:
+        if avg in [0, 2]:
+            # Convert the probability into free energy
+            free_ene_RC12 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
+            for i in xrange(num_bins1):
+                for j in xrange(num_bins2):
+                    free_ene_RC12[i][j] = -KbT*log(Prob_RC12[i][j])
+        elif avg==1:
+            free_ene_RC12 = Prob_RC12
+
+        # Normalize the free energy
+        min_free_ene = 99999999999.0
         for i in xrange(num_bins1):
             for j in xrange(num_bins2):
-                free_ene_RC12[i][j] = -KbT*log(Prob_RC12[i][j])
-    elif avg==1:
-        free_ene_RC12 = Prob_RC12
+                if free_ene_RC12[i][j] < min_free_ene:
+                    min_free_ene = free_ene_RC12[i][j]
+ 
+        for i in xrange(num_bins1):
+            for j in xrange(num_bins2):
+                free_ene_RC12[i][j] = round(free_ene_RC12[i][j] - min_free_ene, 3)
+ 
+        # Print out the free energy
+        w_free_ene = open(figname+'.free_energy', 'w')
+        for i in xrange(num_bins1):
+            for j in xrange(num_bins2):
+                print("%-10.3f" %free_ene_RC12[i][j], end=' ', file=w_free_ene)
+            print('', file=w_free_ene)
+        w_free_ene.close()
+ 
+        # Print the X and Y axes coordinates
+        w_xaxis = open(figname + '.free_energy.xaxis_crd', 'w')
+        for i in xrange(num_bins1):
+            print("%-10.3f" %xaxis_RC1[i], file=w_xaxis)
+        w_xaxis.close()
+ 
+        # Print the X and Y axes coordinates
+        w_yaxis = open(figname + '.free_energy.yaxis_crd', 'w')
+        for i in xrange(num_bins2):
+            print("%-10.3f" %xaxis_RC2[i], file=w_yaxis)
+        w_yaxis.close()
+ 
+        # Transpose for plotting
+        free_ene_RC12 = transpose(free_ene_RC12)
+ 
+        # Plot out the 2D free energy
+        plt.contourf(xaxis_RC1, xaxis_RC2, free_ene_RC12, 50, cmap=colmap)
+        plt.colorbar().set_label('Free Energy (kcal/mol)')
+        plt.xlabel(xlabel1)
+        plt.ylabel(xlabel2)
+ 
+        if ini_crd != []:
+            plt.scatter(ini_crd[0], ini_crd[1], color='r', marker='o', linewidth=2.0)
+ 
+        if fin_crd != []:
+            plt.scatter(fin_crd[0], fin_crd[1], color='g', marker='o', linewidth=2.0)
+ 
+        plt.savefig(figname, dpi=900)
+        plt.close()
+ 
+        plot_string_free_energy(free_ene_RC12, ini_crd, xaxis_RC1, xaxis_RC2,
+                                num_bins1, num_bins2, figname + '.inistr')
+        plot_string_free_energy(free_ene_RC12, fin_crd, xaxis_RC1, xaxis_RC2,
+                                num_bins1, num_bins2, figname + '.finstr')
 
-    min_free_ene = 99999999999.0
-    for i in xrange(num_bins1):
-        for j in xrange(num_bins2):
-            if free_ene_RC12[i][j] < min_free_ene:
-                min_free_ene = free_ene_RC12[i][j]
+    else:
 
-    for i in xrange(num_bins1):
-        for j in xrange(num_bins2):
-            free_ene_RC12[i][j] = round(free_ene_RC12[i][j] - min_free_ene, 3)
+        n_sample = 0
+        for i in xrange(num_bins1):
+            for j in xrange(num_bins2):
+                n_sample = n_sample + Prob_RC12[i][j]
+        print('Axes %s %s has %10d sampled!' %(xlabel1, xlabel2, n_sample))
 
-    # Print out the free energy
-    w_free_ene = open(figname+'.free_energy', 'w')
-    for i in xrange(num_bins1):
-        for j in xrange(num_bins2):
-            print("%-10.3f" %free_ene_RC12[i][j], end=' ', file=w_free_ene)
-        print('', file=w_free_ene)
-    w_free_ene.close()
+        # Print out the 2D counts
+        w_free_ene = open(figname+'.txt', 'w')
+        for i in xrange(num_bins1):
+            for j in xrange(num_bins2):
+                print("%10d" %Prob_RC12[i][j], end=' ', file=w_free_ene)
+            print('', file=w_free_ene)
+        w_free_ene.close()
 
-    # Print the X and Y axes coordinates
-    w_xaxis = open(figname + '.free_energy.xaxis_crd', 'w')
-    for i in xrange(num_bins1):
-        print("%-10.3f" %xaxis_RC1[i], file=w_xaxis)
-    w_xaxis.close()
+        # Transpose for plotting
+        Prob_RC12 = transpose(Prob_RC12)
 
-    # Print the X and Y axes coordinates
-    w_yaxis = open(figname + '.free_energy.yaxis_crd', 'w')
-    for i in xrange(num_bins2):
-        print("%-10.3f" %xaxis_RC2[i], file=w_yaxis)
-    w_yaxis.close()
+        # Plot out map of the 2D counts
+        plt.contourf(xaxis_RC1, xaxis_RC2, Prob_RC12, 50, cmap=colmap)
+        plt.colorbar().set_label('Count')
+        plt.xlabel(xlabel1)
+        plt.ylabel(xlabel2)
 
-    # Transpose for plotting
-    free_ene_RC12 = transpose(free_ene_RC12)
+        if ini_crd != []:
+            plt.scatter(ini_crd[0], ini_crd[1], color='r', marker='o', linewidth=2.0)
 
-    # Plot out the 2D free energy
-    plt.contourf(xaxis_RC1, xaxis_RC2, free_ene_RC12, 50, cmap=colmap)
-    plt.colorbar().set_label('Free Energy (kcal/mol)')
-    plt.xlabel(xlabel1)
-    plt.ylabel(xlabel2)
+        if fin_crd != []:
+            plt.scatter(fin_crd[0], fin_crd[1], color='g', marker='o', linewidth=2.0)
 
-    if ini_crd != []:
-        plt.scatter(ini_crd[0], ini_crd[1], color='r', marker='o', linewidth=2.0)
+        plt.savefig(figname, dpi=900)
+        plt.close()
 
-    if fin_crd != []:
-        plt.scatter(fin_crd[0], fin_crd[1], color='g', marker='o', linewidth=2.0)
-
-    plt.savefig(figname, dpi=900)
-    plt.close()
-
-    plot_string_free_energy(free_ene_RC12, ini_crd, xaxis_RC1, xaxis_RC2, num_bins1, num_bins2, figname + '.inistr')
-    plot_string_free_energy(free_ene_RC12, fin_crd, xaxis_RC1, xaxis_RC2, num_bins1, num_bins2, figname + '.finstr')
+        plot_string_free_energy(Prob_RC12, ini_crd, xaxis_RC1, xaxis_RC2,
+                                num_bins1, num_bins2, figname + '.inistr')
+        plot_string_free_energy(Prob_RC12, fin_crd, xaxis_RC1, xaxis_RC2,
+                                num_bins1, num_bins2, figname + '.finstr')
 
 def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
                      rc_diml2, coefl2, num_bins1, num_bins2, figname, xlabel1, xlabel2,
@@ -493,11 +569,14 @@ def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
                              'provide total energy list as well!')
 
     # Generate the free energy for each bin
+    Prob_RC12_N = [[0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
     Prob_RC12_0 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
     Prob_RC12_1 = [[0.0 for i in xrange(num_bins2)] for j in xrange(num_bins1)]
 
-    ini_crd = get_string_2D(data_dict, string_seq[0], string_seq[1], rc_diml1, coefl1, rc_diml2, coefl2, figname + '.inistr')
-    fin_crd = get_string_2D(data_dict, string_seq[2], string_seq[3], rc_diml1, coefl1, rc_diml2, coefl2, figname + '.laststr')
+    ini_crd = get_string_2D(data_dict, string_seq[0], string_seq[1], rc_diml1,
+                            coefl1, rc_diml2, coefl2, figname + '.inistr')
+    fin_crd = get_string_2D(data_dict, string_seq[2], string_seq[3], rc_diml1,
+                            coefl1, rc_diml2, coefl2, figname + '.laststr')
 
     count = 0
     kk = 0
@@ -526,11 +605,15 @@ def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
                 for k in xrange(num_sims):
                     data_per_sim2 = len(data_dict[k+1].data)
                     denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
- 
+
+                Prob_RC12_N[count_indx1][count_indx2] = Prob_RC12_N[count_indx1][count_indx2] + 1
                 Prob_RC12_0[count_indx1][count_indx2] = Prob_RC12_0[count_indx1][count_indx2] + 1.0/denom
                 count = count + 1
 
-        plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12_0, figname, xlabel1, xlabel2, colmap, ini_crd, fin_crd, 0)
+        plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12_N, figname +'.count.pdf',
+                         xlabel1, xlabel2, colmap, ini_crd, fin_crd, 0, 1)
+        plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12_0, figname,
+                         xlabel1, xlabel2, colmap, ini_crd, fin_crd, avg)
 
     else:
         for i in xrange(0, num_sims):
@@ -556,7 +639,8 @@ def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
                 for k in xrange(num_sims):
                     data_per_sim2 = len(data_dict[k+1].data)
                     denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
- 
+
+                Prob_RC12_N[count_indx1][count_indx2] = Prob_RC12_N[count_indx1][count_indx2] + 1
                 Prob_RC12_0[count_indx1][count_indx2] = Prob_RC12_0[count_indx1][count_indx2] + 1.0/denom
                 Prob_RC12_1[count_indx1][count_indx2] = Prob_RC12_1[count_indx1][count_indx2] + data_list[count]/denom         
                 count = count + 1
@@ -566,36 +650,18 @@ def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
             for j in xrange(num_bins1):
                 if Prob_RC12_0[j][i] != 0:
                     Prob_RC12_2[j][i] = Prob_RC12_1[j][i]/Prob_RC12_0[j][i]
-        plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12_2, figname, xlabel1, xlabel2, colmap, ini_crd, fin_crd, avg)
 
-###############################################################################
-#                    About getting the biased potentials
-###############################################################################
-
-"""
-def get_Ubiasl(data_dict, num_sims, dim):
-    #To get the e^(-beta*Wk(Ri,l)) list (totally has i*l*k terms)
-    Ubiasl = []
-    for i in xrange(0, num_sims): #Sum over big N for i
-        data_per_sim = len(data_dict[i+1].data)
-        for l in xrange(0, data_per_sim): #Sum over small n for l
-            for k in xrange(0, num_sims): #Sum over i,l for k
-                Ubias = 0.0
-                for ii in xrange(0, dim): #Along each dimension
-                    equ_dis = data_dict[k+1].equ_dis[ii]
-                    constr = data_dict[k+1].constr[ii]
-                    samp_dis = data_dict[i+1].data[l,ii]
-                    Ubias = Ubias + 0.5 * constr * (samp_dis - equ_dis)**2
-                Ubias = exp(-Ubias/KbT)
-                Ubiasl.append(Ubias)
-    return Ubiasl
-"""
+        plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12_N, figname +'.count.pdf',
+                         xlabel1, xlabel2, colmap, ini_crd, fin_crd, 0, 1)
+        plot_free_ene_2D(num_bins1, num_bins2, xaxis_RC1, xaxis_RC2, Prob_RC12_2, figname,
+                         xlabel1, xlabel2, colmap, ini_crd, fin_crd, avg)
 
 ###############################################################################
                               #The WHAM iteration
 ###############################################################################
 
-def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv, read_Fx="", read_Ubiasl=""):
+def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv,
+         btstrap=0, read_Fx="", read_Ubiasl=""):
 
     global KbT
 
@@ -643,6 +709,17 @@ def wham(dim, react_paths, first_num_imgs, num_cycles, num_bins, wham_conv, read
             raise ValueError('The numbers of equlibrium distances and windows are not consistent!')
     else:
         raise ValueError('The number of equlibrium distances and force constants are not consistent!')
+
+    # Apply the fake bootstrapping
+    if btstrap == 1:
+        datal2 = datal
+        seed() # Initialize the random generator
+        for i in xrange(num_sims):
+            for j in xrange(len(datal[i])):
+                k = randint(0, len(datal[i])-1)
+                datal2[i][j] = datal[i][k]
+        datal = datal2
+        del datal2
 
     # Generate the data_dict, which contains all the data
     data_dict = {}
