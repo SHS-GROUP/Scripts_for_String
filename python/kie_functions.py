@@ -1,16 +1,26 @@
 #!/home/pengfeil/AMBER/amber16/amber16/miniconda/bin/python
-# Filename: cal_kie.py
 from __future__ import print_function
 from math import sqrt, gamma, pi
 from os import popen, system
 from numpy import trapz, inf, real, exp
 from scipy.special import eval_genlaguerre as elag
-from scipy.special import kn
+from scipy.special import kn, hermite
+from numpy.polynomial.hermite import hermval
 from scipy.integrate import quad
 from scipy.misc import comb
 
 system("module load mathematica/mathematica-11")
 system("cp ~/Projs/PCET_code/MathPCETwithET.m .")
+
+# Constants
+
+kb = 1.380649 * 6.0221409 #J/K 10^-23 * 10^23 = 1.0
+kb = kb / 4184.0 #kcal/(mol*K)
+
+omass = 15.999
+cmass = 12.000
+hmass = 1.0072756064562605
+dmass = 2.0135514936645316
 
 ###############################################################################
 #                                   Wavefunctions
@@ -239,12 +249,57 @@ def cal_Suv(coeff, v1, v2, xmass):
     #fcsum = real(fcsum)
     return fcsum
 
-def cal_Suv_HO(coeff, v1, v2, freq1, freq2, d, xmass):
-    """Corresponding to HarmonicOverlap in MathPCETwithET.m
-       Reference: J.-L. Chang, J. Mol. Spectrosc. 232 (2005) 102-104"""
-    pass
+def Hermite(n, x):
 
-def cal_Suv_HO_math(coeff, v1, v2, freq1, freq2, d, xmass):
+    cn = []
+    for i in xrange(n-1):
+        cn.append(0.0)
+    cn.append(1.0)
+
+    Hnx = hermval(x, cn)
+    return Hnx
+
+def cal_Suv_HO(v1, v2, freq1, freq2, d, xmass):
+    """Corresponding to HarmonicOverlap in MathPCETwithET.m
+       Reference: J.-L. Chang, J. Mol. Spectrosc. 232 (2005) 102-104,
+       Mainly from equation 20"""
+
+    # hbar = 1.0545718*10**-34  #J*s
+    # v = 3.0 * 10**10 #cm/s
+    # 1 u = 1.660539040*10**-27 #kg
+    # 1 m = 10**10 A
+
+    c = 1.660539040 * 3.0 / 1.0545718 * (10**-3)
+
+    a1 = c * xmass * freq1 # unit is A^-2
+    a2 = c * xmass * freq2 # unit is A^-2
+
+    s = (a1*a2*(d**2))/(a1+a2) # unitless
+    A = 2.0 * sqrt(a1*a2) / (a1+a2) #unitless
+    fac0 = sqrt(A*exp(-s)/(2.0*(v1+v2)*gamma(v1+1)*gamma(v2+1)))
+    b1 = -(d*a2*sqrt(a1))/(a1+a2)
+    b2 = d*a1*sqrt(a2)/(a1+a2)
+
+    fcsum = 0.0
+    for l1 in xrange(0, v1+1):
+        for l2 in xrange(0, v2+1):
+            fac1 = comb(v1, l1) * comb(v2, l2)
+            fac2 = Hermite(v1-l1, b1) * Hermite(v2-l2, b2)
+            fac3 = ((2.0*sqrt(a1))**l1) * ((2.0*sqrt(a2))**l2)
+            if (l1+l2)%2 == 1:
+                fac4 = 0
+            else:
+                K = (l1+l2)/2
+                fac4 = 1
+                for i in xrange(1, K+1):
+                    fac4 = fac4 * (2*i-1)
+                fac4 = float(fac4) / ((a1+a2)**K)
+            fcsum = fcsum + fac1 * fac2 * fac3 * fac4
+
+    fcsum = fac0 * fcsum
+    return fcsum
+
+def cal_Suv_HO_math(v1, v2, freq1, freq2, d, xmass):
     pass
 
 ###############################################################################
@@ -299,9 +354,28 @@ def cal_morse_ene_math(D, m, a, n):
 
     return En
 
-def cal_HO_ene(freq, n):
+def cal_HO_ene1(k, m, n):
     """Corresponding to HOEnergy in MathPCETwithET.m"""
-    pass
+    # k in unit as kcal/mol
+    # m in unit as amu
+
+    # hbar = 1.0545718*10**-34  #J*s
+    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
+    # 1A^-1 = 10**10 m^-1
+    # 1 amu = 1.660539040*10**-27 #kg
+
+    c = 1.0545718 * 6.022 / 4184.0 * sqrt(4184.0/(6.022*1.66)) * 10.0
+    energy = c * sqrt(k/m) * (n + 0.5) # in unit of kcal/mol
+    return energy
+
+def cal_HO_ene2(omega, n):
+    """Corresponding to HOEnergy in MathPCETwithET.m"""
+    # omega in unit as cm-1
+    # v = 3.0*10**8
+
+    c = 1.0545718 * 6.022 * 3.0 * 0.1 / 4184.0
+    energy = c * omega * (n + 0.5) # in unit of kcal/mol
+    return energy
 
 def cal_HO_ene_math(freq, n):
     pass
@@ -367,6 +441,34 @@ def cal_kR(coeff, umax, vmax, xmass, cmode, kb, T):
             kuv_R = cal_kuv_R(coeff, u, v, xmass, cmode, kb, T)
             k_R += Pu[u] * kuv_R
     return k_R
+
+def get_ks(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, print_per=0):
+    #
+    # Get the parition function parameter
+    #
+    PR_list = norm_prob(WR_list, kb, T)
+    k_h_list = []
+    k_d_list = []
+    for j in xrange(0, len(R_list)):
+        R = R_list[j]
+        coeff = para_list[j]
+        kR_h = cal_kR(coeff, umax, vmax, hmass, cmode, kb, T)
+        kR_d = cal_kR(coeff, umax, vmax, dmass, cmode, kb, T)
+        k_h_list.append(kR_h * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
+        k_d_list.append(kR_d * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
+    k_h = sum(k_h_list)
+    k_d = sum(k_d_list)
+
+    #print(k_h_list)
+    #print(k_d_list)
+
+    if print_per != 0:
+        print("Percentage of %7.1f K" %T)
+        print("R", "H_rate", "D_rate")
+        for j in xrange(0, len(R_list)):
+            print('%6.3f %5.2f %5.2f' %(R_list[j], 100.0 * k_h_list[j]/k_h, 100.0 * k_d_list[j]/k_d))
+
+    return k_h, k_d
 
 ###############################################################################
 #                              Reading and Writing
