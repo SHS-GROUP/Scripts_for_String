@@ -9,18 +9,26 @@ from numpy.polynomial.hermite import hermval
 from scipy.integrate import quad
 from scipy.misc import comb
 
-system("module load mathematica/mathematica-11")
-system("cp ~/Projs/PCET_code/MathPCETwithET.m .")
+#system("module load mathematica/mathematica-11")
+#system("cp ~/Projs/PCET_code/MathPCETwithET.m .")
 
 # Constants
+amu = 1.660539040 #Unit: 10^-27 kg; atomic mass unit
+hbar = 1.0545718 #Unit: 10^-34 J*s
+h = hbar * 2.0 * pi
+avg_cons = 6.022140857 #Unit: 10^23/mol
+boltz_cons = 1.38064852 #Unit: 10^-23 J/K
+kcal2j = 4184.0 #Unitless
+lspeed = 2.99792458 #Unit: 10^10 cm/s
+bohr2a = 0.529177
 
-kb = 1.380649 * 6.0221409 #J/K 10^-23 * 10^23 = 1.0
-kb = kb / 4184.0 #kcal/(mol*K)
+kb = boltz_cons * avg_cons #J/K 10^-23 * 10^23 = 1.0
+kb = kb / kcal2j #Transfer from J/K to kcal/(mol*K)
 
 omass = 15.999
 cmass = 12.000
-hmass = 1.0072756064562605
-dmass = 2.0135514936645316
+hmass = 1.00726
+dmass = 2.01410
 
 ###############################################################################
 #                                   Wavefunctions
@@ -29,24 +37,22 @@ def cal_wfn(D, m, a, r, re, n):
     #NOT USED!
     """Calculate the wavefunction for Morse potential"""
 
-    #Calculate the constant
-    c = (4.184 * 1000.0 / 6.0221409) * 1.660539040
-    #                     *=10**-23  *=10**-27  *=10^-10
-    c = sqrt(c)/1.0545718
-    #           *=10**-34
-    c = 0.1 * c
-    #           as 10**-35 * 10**34 = 0.1
+    # lamada = sqrt(2.0 * m * D) / (a * hbar)
+    # m unit: amu  - kg
+    # De unit: kcal/mol - J
+    # a unit: A^-1 - m^-1
+    # lamada unit: sqrt(kg * kg * m^2 * s^-2) / (m^-1 * kg * m^2 * s^-2 * s)
+    #              = kg * m * s^-1 / kg * m * s^-1 = 1
 
-    # 1 kcal/mol = 4.184*1000.0/6.0221409*10**-23
-    # 1 u = 1.660539040*10**-27 #kg
-    # hbar = 1.0545718*10**-34  #J*s
-    # 1A^-1 = 10**10 m^-1
-    # c has the unit of 1
+    #Calculate the constant
+    c = sqrt (amu * (kcal2j / avg_cons)) / (1.0 * hbar)
+    #   sqrt (10^-27 * (1.0 /  10^23  )) / (10^10 * 10^-34) = 0.1
+    c = 0.1 * c
 
     x = a*r
     xe = a*re
-    #m = (m1 * m2) / (m1 + m2)
-    lamada = sqrt(2*m*D) * c / a
+
+    lamada = c * sqrt(2.0*m*D) / a
     z = 2.0 * lamada * exp(xe-x)
     b = lamada-n-0.5
     Nn = sqrt((gamma(n+1.0)*2.0*b)/(gamma(2*lamada-n)))
@@ -57,28 +63,28 @@ def cal_wfn0(D, m, a, r, re):
     #NOT USED!
     """Calculate the ground-state wavefunction for Morse potential"""
 
-    #Calculate the constant
-    c = (4.184 * 1000.0 / 6.0221409) * 1.660539040
-    #                     *=10**-23  *=10**-27  *=10^-10
-    c = sqrt(c)/1.0545718
-    #           *=10**-34
-    c = 0.1 * c
-    #           as 10**-35 * 10**34 = 0.1
+    # lamada = sqrt(2.0 * m * D) / (a * hbar)
+    # m unit: amu  - kg
+    # De unit: kcal/mol - J
+    # a unit: A^-1 - m^-1
+    # lamada unit: sqrt(kg * kg * m^2 * s^-2) / (m^-1 * kg * m^2 * s^-2 * s)
+    #              = kg * m * s^-1 / kg * m * s^-1 = 1
 
-    # 1 kcal/mol = 4.184*1000.0/6.0221409*10**-23
-    # 1 u = 1.660539040*10**-27 #kg
-    # hbar = 1.0545718*10**-34  #J*s
-    # 1A^-1 = 10**10 m^-1
-    # c has the unit of 1
+    #Calculate the constant
+    c = sqrt (amu * (kcal2j / avg_cons)) / (1.0 * hbar)
+    #   sqrt (10^-27 * (1.0 /  10^23  )) / (10^10 * 10^-34) = 0.1
+    c = 0.1 * c
 
     x = a*r
     xe = a*re
-    #m = (m1 * m2) / (m1 + m2)
 
-    lamada = sqrt(2*m*D) * c / a
+    lamada = c * sqrt(2*m*D) / a
     z = 2.0 * lamada * exp(xe-x)
     Nn = sqrt((2.0*lamada-1)/gamma(2.0*lamada))
-    #factor = 27.0 / ((2.0 * lamada)**(lamada-0.5) * exp(0.0-lamada) * Nn)
+
+    # Whether to scale:
+    # factor = 27.0 / ((2.0 * lamada)**(lamada-0.5) * exp(0.0-lamada) * Nn)
+
     factor = 1.0
     psi0 = factor * Nn * (z ** (lamada-0.5)) * exp(-0.5 * z)
     return psi0
@@ -126,15 +132,19 @@ def cal_Suv_Sym(D, m, a, R, u, v):
     Also, it assumes we have the same beta values for DH and AH
     """
 
-    #Calculate the constant
-    c = (4.184 * 1000.0 / 6.0221409) * 1.660539040 
-    #                     *=10^-23  *=10^-27  [*=10^-50 J*kg]
-    c = sqrt(c)/1.0545718
-    #           *=10^34 sqrt(J*kg)*m/(J*s)
-    c = 0.1 * c
-    #           as 10^-25 * 10^34 * 10^-10 = 0.1
+    # lamada = sqrt(2.0 * m * D) / (a * hbar)
+    # m unit: amu  - kg
+    # De unit: kcal/mol - J
+    # a unit: A^-1 - m^-1
+    # lamada unit: sqrt(kg * kg * m^2 * s^-2) / (m^-1 * kg * m^2 * s^-2 * s)
+    #              = kg * m * s^-1 / kg * m * s^-1 = 1
 
-    lamada = sqrt(2.0*m*D) * c / a #unitless
+    #Calculate the constant
+    c = sqrt (amu * (kcal2j / avg_cons)) / (1.0 * hbar)
+    #   sqrt (10^-27 * (1.0 /  10^23  )) / (10^10 * 10^-34) = 0.1
+    c = 0.1 * c
+
+    lamada = c * sqrt(2.0*m*D) / a
     p = 2.0*lamada-1.0
     temp_fac0 = ((p-2.0*u)*(p-2.0*v)*((p+1.0)**(2.0*p))) / (gamma(u+1.0)*gamma(p+1.0-u)*gamma(v+1.0)*gamma(p+1.0-v))
 
@@ -183,31 +193,30 @@ def cal_Suv(coeff, v1, v2, xmass):
     """Calculate the overlap integral square between donor-H and acceptor-H
        wavefunctions based on python code,
        Corresponding to MorseOverlap in MathPCETwithET.m,
-       From equation 20 and Appendix A of International journal of
-       quantum chemistry 2002, 88 (2), 280-295."""
+       From equation 20 and Appendix A of
+       Lopez, Rivera, Smirnov, and Frank,
+       International journal of quantum chemistry 2002, 88 (2), 280-295."""
 
     R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
     R = R - req_ch - req_oh
 
-    #Calculate the constant
-    c1 = (4.184 * 1000.0 / 6.0221409) * 1.660539040
-    #                     *=10^-23  *=10^-27  [*=10^-50 J*kg]
-    c1 = sqrt(c1)/1.0545718
-    #           *=10^34 sqrt(J*kg)*m/(J*s)
-    c1 = 0.1 * c1
-    #           as 10^-25 * 10^34 * 10^-10 = 0.1
+    # lamada = sqrt(2.0 * m * D) / (beta * hbar)
+    # m unit: amu  - kg
+    # De unit: kcal/mol - J
+    # beta unit: A^-1 - m^-1
+    # lamada unit: sqrt(kg * kg * m^2 * s^-2) / (m^-1 * kg * m^2 * s^-2 * s)
+    #              = kg * m * s^-1 / kg * m * s^-1 = 1
 
-    # 1 kcal/mol = 4.184*1000.0/6.0221409*10**-23
-    # 1 u = 1.660539040*10**-27 #kg
-    # hbar = 1.0545718*10**-34  #J*s
-    # 1A^-1 = 10**10 m^-1
-    # c has the unit of 1
+    #Calculate the constant
+    c = sqrt (amu * (kcal2j / avg_cons)) / (1.0 * hbar)
+    #   sqrt (10^-27 * (1.0 /  10^23  )) / (10^10 * 10^-34) = 0.1
+    c = 0.1 * c
 
     #
     # In front of the summation
     #
-    lamada1 = sqrt(2.0*xmass*D1) * c1 / beta1
-    lamada2 = sqrt(2.0*xmass*D2) * c1 / beta2
+    lamada1 = c * sqrt(2.0*xmass*D1) / beta1
+    lamada2 = c * sqrt(2.0*xmass*D2) / beta2
     j1 = lamada1 - 0.5
     j2 = lamada2 - 0.5
     a = beta2/beta1
@@ -252,87 +261,131 @@ def cal_Suv(coeff, v1, v2, xmass):
 def Hermite(n, x):
 
     cn = []
-    for i in xrange(n-1):
+    for i in xrange(n):
         cn.append(0.0)
     cn.append(1.0)
 
     Hnx = hermval(x, cn)
     return Hnx
 
-def cal_Suv_HO(v1, v2, freq1, freq2, d, xmass):
+def cal_HO_Suv(v1, v2, freq1, freq2, d, xmass):
     """Corresponding to HarmonicOverlap in MathPCETwithET.m
        Reference: J.-L. Chang, J. Mol. Spectrosc. 232 (2005) 102-104,
        Mainly from equation 20"""
 
-    # hbar = 1.0545718*10**-34  #J*s
-    # v = 3.0 * 10**10 #cm/s
-    # 1 u = 1.660539040*10**-27 #kg
-    # 1 m = 10**10 A
+    # a = m * omega / hbar = m * 2pi * v0 / hbar, v0 in unit as cm^-1
+    # Unit: kg * cm^-1 [* cm/s] / (J*s) = (kg/s) / (kg*m^2*s^-2*s) = m^-2 = 10^-20 A^-2
+    # Magnitude: 10^-27 * 10^10 / 10^-34 = 10^17 m^-2 = 10^-3 A^-2
 
-    c = 1.660539040 * 3.0 / 1.0545718 * (10**-3)
+    # 2.0 * pi was used because of the omega= 2.0 * pi * v0
 
-    a1 = c * xmass * freq1 # unit is A^-2
-    a2 = c * xmass * freq2 # unit is A^-2
+    freq1 = freq1 * sqrt(hmass / xmass)
+    freq2 = freq2 * sqrt(hmass / xmass)
+
+    c = amu * 2.0 * pi * lspeed / hbar * (10.0**-3)
+
+    a1 = c * xmass * freq1 # a1 has unit as A^-2
+    a2 = c * xmass * freq2 # a2 has unit as A^-2
 
     s = (a1*a2*(d**2))/(a1+a2) # unitless
-    A = 2.0 * sqrt(a1*a2) / (a1+a2) #unitless
-    fac0 = sqrt(A*exp(-s)/(2.0*(v1+v2)*gamma(v1+1)*gamma(v2+1)))
-    b1 = -(d*a2*sqrt(a1))/(a1+a2)
-    b2 = d*a1*sqrt(a2)/(a1+a2)
+    A = 2.0 * sqrt(a1*a2) / (a1+a2) # unitless
+
+    #print(s, A)
+
+    fac0 = A*exp(-s)/((2.0**(v1+v2))*gamma(v1+1)*gamma(v2+1))
+    fac0 = sqrt(fac0)
+
+    #print(fac0)
+
+    b1 = -(d*a2*sqrt(a1))/(a1+a2) # unitless 
+    b2 = d*a1*sqrt(a2)/(a1+a2) # unitless
+
+    #print(b1, b2)
 
     fcsum = 0.0
     for l1 in xrange(0, v1+1):
         for l2 in xrange(0, v2+1):
             fac1 = comb(v1, l1) * comb(v2, l2)
+            #print(v1-l1, b1, v2-l2, b2)
             fac2 = Hermite(v1-l1, b1) * Hermite(v2-l2, b2)
             fac3 = ((2.0*sqrt(a1))**l1) * ((2.0*sqrt(a2))**l2)
             if (l1+l2)%2 == 1:
-                fac4 = 0
+                fac4 = 0.0
             else:
-                K = (l1+l2)/2
                 fac4 = 1
+                K = (l1+l2)/2
                 for i in xrange(1, K+1):
                     fac4 = fac4 * (2*i-1)
                 fac4 = float(fac4) / ((a1+a2)**K)
             fcsum = fcsum + fac1 * fac2 * fac3 * fac4
+            #print(fac1, fac2, fac3, fac4)
 
-    fcsum = fac0 * fcsum
+    fcsum = fcsum * fac0
     return fcsum
 
-def cal_Suv_HO_math(v1, v2, freq1, freq2, d, xmass):
+def cal_OH_Suv_math(v1, v2, freq1, freq2, d, xmass):
     pass
 
 ###############################################################################
 #                                   Energies
 ###############################################################################
 
-def cal_morse_ene(D, m, a, n):
+def cal_Morse_ene(D, m, a, n):
     """Corresponding to MorseEnergy in MathPCETwithET.m,
        Calculate the eigen state energies for Morse potential based on python"""
 
+    """
+    FORMULA 1:
+
+    Equation 43 in
+    The Morse oscillator in position space, momentum space, and phase space
+    J. P. Dahl, M. Springborg, J. Chem. Phys. 1988, 88(7), 4535
+
+    # En = h * v0 * [ (n + 0.5) - (1 / (2 * lamada)) * (n + 0.5)^2 ]
+    # Herein h * v0 = hbar * omega
+
+    # lamada = sqrt(2.0 * m * D) / (a * hbar)
+    # m unit: amu  - kg
+    # De unit: kcal/mol - J
+    # a unit: A^-1 - m^-1
+    # hbar unit: J*s
+    # lamada unit: sqrt(kg * kg * m^2 * s^-2) / (m^-1 * kg * m^2 * s^-2 * s)
+    #              = kg * m * s^-1 / kg * m * s^-1 = 1, so lamada is unitless
+
     #Calculate the constant
-    c1 = (2.0 * 4.184 * 1000.0 / 6.0221409 * 1.0) / 1.660539040
-    #                         *=10^-23   *=10^20   *=10^27  *=10^24 in total
-    c1 = sqrt(c1) * 1.0545718
-    #    *=10^12  *=10**-34 *=10**-22 in total
-    c1 = c1 * 0.1
+    c = sqrt (amu * (kcal2j / avg_cons)) / (1.0 * hbar)
+    #   sqrt (10^-27 * (1.0 /  10^23  )) / (10^10 * 10^-34) = 0.1
+    c = c * 0.1
 
-    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
-    # 1A^-1 = 10**10 m^-1
-    # 1 u = 1.660539040*10**-27 #kg
-    # hbar = 1.0545718*10**-34  #J*s
-    # c has the unit of 1
+    # lamada = sqrt (2 * m * D) / (a * hbar)
+    lamada = c * sqrt(2.0*m*D) / a # unitless
 
-    #m = (m1 * m2) / (m1 + m2)
-    lamada = sqrt(2.0*m*D) * c1 / a
+    # Formula: hbar * omega = hbar * sqrt (2 * D * a^2 / m)
+    # Magnitude:              10^-34 * sqrt(   10^-23 * 10^20 / 10^-27) = 10^-22
+    # Unit: J*s    * sqrt(   J * m^-2 / kg)
+    #                = kg * m^2 * s^-1 * sqrt(kg * m^2 * s^-2 * m^-2 / kg)
+    #                = kg * m^2 * s^-1 * s^-1
+    #                = J
 
-    c2 = 1.0545718 * sqrt(4184.0/(6.0221409*1.660539040)) * 10.0
-    homega = c2 * sqrt(2.0*D*(a**2)/m) * 6.0221409 / 4184.0 #Transfer it back to kcal/mol
+    # v0 = a/(2.0*pi) * sqrt(2.0*D/m)
+    c1 = sqrt( kcal2j / (avg_cons * amu))
+    hv0 = c1 * (hbar * 2.0 * pi) * a/(2.0*pi) * sqrt(2.0*D/m) * avg_cons / kcal2j * 10.0 #Transfer J back to kcal/mol
 
-    En = homega*((n+0.5)-(1.0/(2.0*lamada))*(n+0.5)**2)
+    En = hv0 * ((n+0.5)-(1.0/(2.0*lamada))*(n+0.5)**2)
+    """
+
+    # FORMULA 2
+    # From Wikipedia: https://en.wikipedia.org/wiki/Morse_potential
+    # after the line "The eigenenergies in the initial variables have form:"
+    # En = h * v0 * (n + 0.5) - [(h * v0 * (n + 0.5))^2 / (4 * D)]
+
+    # v0 = a/(2.0*pi) * sqrt(2.0*D/m)
+    c1 = sqrt( kcal2j / (avg_cons * amu))
+    hv0 = c1 * (hbar * 2.0 * pi) * a/(2.0*pi) * sqrt(2.0*D/m) * avg_cons / kcal2j * 10.0 #Transfer J back to kcal/mol
+    En = hv0 * (n+0.5)-((hv0*(n+0.5))**2)/(4.0*D)
     return En
 
-def cal_morse_ene_math(D, m, a, n):
+def cal_Morse_ene_math(D, m, a, n):
     """Calculate the eigen state energies for Morse potential from the Mathmatica code"""
 
     D = str(D)
@@ -356,25 +409,31 @@ def cal_morse_ene_math(D, m, a, n):
 
 def cal_HO_ene1(k, m, n):
     """Corresponding to HOEnergy in MathPCETwithET.m"""
-    # k in unit as kcal/mol
+
+    # k in unit as kcal/(mol*A^2)
     # m in unit as amu
+    # omega = sqrt(k/m)
+    # omega = 2*pi*v0
+    # v0 = sqrt(k/m) / (2*pi)  unit: s^-1
 
-    # hbar = 1.0545718*10**-34  #J*s
-    # 1 kcal/mol = 4.184*1000.0/6.022*10**-23
-    # 1A^-1 = 10**10 m^-1
-    # 1 amu = 1.660539040*10**-27 #kg
+    # hv0 = h * sqrt(k/m) / (2*pi) = hbar * sqrt(k/m)
+    # Magnitude: 10^-34 * 10^23       * sqrt(1.0 / (10^23 * 10^-27) * 10^20) = 10.0
+    # Unit:      kcal/mol * s *       * sqrt(kg * m^2 * s^-2 * m^-2 / kg) =  kcal/mol
 
-    c = 1.0545718 * 6.022 / 4184.0 * sqrt(4184.0/(6.022*1.66)) * 10.0
-    energy = c * sqrt(k/m) * (n + 0.5) # in unit of kcal/mol
+    c = hbar * sqrt(kcal2j/(avg_cons * amu)) * avg_cons/kcal2j * 10.0
+    hv0 = sqrt(k / m) * c
+    energy = hv0 * (n + 0.5)
     return energy
 
-def cal_HO_ene2(omega, n):
+def cal_HO_ene2(v, n):
     """Corresponding to HOEnergy in MathPCETwithET.m"""
-    # omega in unit as cm-1
-    # v = 3.0*10**8
 
-    c = 1.0545718 * 6.022 * 3.0 * 0.1 / 4184.0
-    energy = c * omega * (n + 0.5) # in unit of kcal/mol
+    # v in unit as cm^-1, omega = 2pi * v
+    # hv = h * v = hbar * omega
+    # Magnitude: 10^-34 * 10^23 * 10^10 = 0.1
+
+    hv = h * v * lspeed * (avg_cons / kcal2j) * 0.1
+    energy = hv * (n + 0.5) # in unit of kcal/mol
     return energy
 
 def cal_HO_ene_math(freq, n):
@@ -390,7 +449,84 @@ def norm_prob(ene_list, kb, T):
     return prob
 
 ###############################################################################
-#                              Rate constants
+#               Rate constants for Harmonic Oscillator wavefunctions
+###############################################################################
+
+def cal_HO_kuv_R(coeff, u, v, xmass, kb, T):
+    """Calculate the kuv for R"""
+
+    R, freq1, req1, freq2, req2, dG0, V_el = coeff
+    R = R - req1 - req2
+
+    # Calculate the vibrational state energies for u and v
+    # and calculate the overlap integral Suv
+    Eu = cal_HO_ene2(freq1, u)
+    Ev = cal_HO_ene2(freq2, v)
+    Suv = cal_HO_Suv(u, v, freq1, freq2, R, xmass)
+
+    #Calculate the rate constat for kuv for R
+
+    # Prefac = (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T))
+    # Unit: ((kcal/mol)^2 / (J*s)) * sqrt(1.0 / ((kcal/mol)^2))
+    #      = (kcal/mol) / (J*s) = J / (J*s) = s^-1
+    # Magnitude: (10^-23 / 10^-34) = 10^11 s^-1
+
+    lamb = 13.4 #kcal/mol, re-oragnization energy
+    c = (kcal2j / avg_cons) * (1.0 / hbar)
+    Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
+    dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
+
+    kuv_R = Prefac * (Suv**2) * exp(-dGuv) #unit 10^11 s^-1
+    kuv_R = kuv_R * (10.0**11) #unit s^-1
+    return kuv_R
+
+def cal_HO_kR(coeff, umax, vmax, xmass, kb, T):
+    """Calculate the k for R, up to umax and vmax"""
+
+    R, freq1, req1, freq2, req2, dG0, V_el = coeff
+
+    #Calculate the eigen energy states
+    Eu_list = [cal_HO_ene2(freq1, u) for u in xrange(0, umax+1)]
+
+    #Normalize the probabilities
+    Pu = norm_prob(Eu_list, kb, T)
+    k_R = 0.0
+    for u in xrange(0, umax+1):
+        for v in xrange(0, vmax+1):
+            kuv_R = cal_HO_kuv_R(coeff, u, v, xmass, kb, T)
+            k_R += Pu[u] * kuv_R
+    return k_R
+
+def get_HO_ks(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, print_per=0):
+    #
+    # Get the parition function parameter
+    #
+    PR_list = norm_prob(WR_list, kb, T)
+    k_h_list = []
+    k_d_list = []
+    for j in xrange(0, len(R_list)):
+        R = R_list[j]
+        coeff = para_list[j]
+        kR_h = cal_HO_kR(coeff, umax, vmax, hmass, kb, T)
+        kR_d = cal_HO_kR(coeff, umax, vmax, dmass, kb, T)
+        k_h_list.append(kR_h * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
+        k_d_list.append(kR_d * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
+    k_h = sum(k_h_list)
+    k_d = sum(k_d_list)
+
+    #print(k_h_list)
+    #print(k_d_list)
+
+    if print_per != 0:
+        print("Percentage of %7.1f K" %T)
+        print("R", "H_rate", "D_rate")
+        for j in xrange(0, len(R_list)):
+            print('%6.3f %5.2f %5.2f' %(R_list[j], 100.0 * k_h_list[j]/k_h, 100.0 * k_d_list[j]/k_d))
+
+    return k_h, k_d
+
+###############################################################################
+#                     Rate constants for Morse wavefunctions
 ###############################################################################
 
 def cal_kuv_R(coeff, u, v, xmass, cmode, kb, T):
@@ -401,23 +537,27 @@ def cal_kuv_R(coeff, u, v, xmass, cmode, kb, T):
     # Calculate the vibrational state energies for u and v
     # and calculate the overlap integral Suv
     if cmode == 'python':
-        Eu = cal_morse_ene(D_ch, xmass, beta_ch, u)
-        Ev = cal_morse_ene(D_oh, xmass, beta_oh, v)
+        Eu = cal_Morse_ene(D_ch, xmass, beta_ch, u)
+        Ev = cal_Morse_ene(D_oh, xmass, beta_oh, v)
         Suv = cal_Suv(coeff, u, v, xmass)
     elif cmode == 'math':
-        Eu = cal_morse_ene_math(D_ch, xmass, beta_ch, u)
-        Ev = cal_morse_ene_math(D_oh, xmass, beta_oh, v)
+        Eu = cal_Morse_ene_math(D_ch, xmass, beta_ch, u)
+        Ev = cal_Morse_ene_math(D_oh, xmass, beta_oh, v)
         Suv = cal_Suv_math(coeff, u, v, xmass)
 
     #Calculate the rate constat for kuv for R
-    lamb = 13.4 #kcal/mol, re-oragnization energy
-    hbar = 1.0545718 #*10**-34  #J*s
-    hbar = hbar * 6.0221409 / 4184.0 #*10^-11 kcal/mol*s
-    c = (1.0/hbar) * (V_el**2) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
-    #c = c * (1.0 / hbar) * (V_el**2) * sqrt(pi/(lamb*kb*T))
 
+    # Prefac = (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T))
+    # Unit: ((kcal/mol)^2 / (J*s)) * sqrt(1.0 / ((kcal/mol)^2))
+    #      = (kcal/mol) / (J*s) = J / (J*s) = s^-1
+    # Magnitude: (10^-23 / 10^-34) = 10^11 s^-1
+
+    lamb = 13.4 #kcal/mol, re-oragnization energy
+    c = (kcal2j / avg_cons) * (1.0 / hbar)
+    Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
     dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
-    kuv_R = c * (Suv**2) * exp(-dGuv) #unit 10^11 s^-1
+
+    kuv_R = Prefac * (Suv**2) * exp(-dGuv) #unit 10^11 s^-1
     kuv_R = kuv_R * (10.0**11) #unit s^-1
     return kuv_R
 
@@ -429,9 +569,9 @@ def cal_kR(coeff, umax, vmax, xmass, cmode, kb, T):
 
     #Calculate the eigen energy states
     if cmode == 'math':
-        Eu_list = [cal_morse_ene_math(D_ch, xmass, beta_ch, u) for u in xrange(0, umax+1)]
+        Eu_list = [cal_Morse_ene_math(D_ch, xmass, beta_ch, u) for u in xrange(0, umax+1)]
     elif cmode == 'python':
-        Eu_list = [cal_morse_ene(D_ch, xmass, beta_ch, u) for u in xrange(0, umax+1)]
+        Eu_list = [cal_Morse_ene(D_ch, xmass, beta_ch, u) for u in xrange(0, umax+1)]
 
     #Normalize the probabilities
     Pu = norm_prob(Eu_list, kb, T)
@@ -469,6 +609,59 @@ def get_ks(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Q
             print('%6.3f %5.2f %5.2f' %(R_list[j], 100.0 * k_h_list[j]/k_h, 100.0 * k_d_list[j]/k_d))
 
     return k_h, k_d
+
+###############################################################################
+#                              Simple calculations
+###############################################################################
+
+def cal_HO_k(m1, m2, v):
+
+    # Formula: k = m * omega^2 = m * (2*pi*v)^2
+    # Unit:        kg * cm^-2 = kg * [cm^2/s^2] * [(4*pi^2)] * cm^-2
+    #                         = kg / s^2 = J / m^2 = (kcal/mol)/(A^2)
+    # Magnitude:   10^-27 * [10^20] * 10^23 / 10^20 = 10^-4
+
+    m = (m1 * m2) / (m1 + m2)
+    c = amu * (lspeed**2) / kcal2j * avg_cons * (10**-4)
+    k = c * m * (2.0 * pi * v)**2
+
+    return k
+
+def cal_HO_v(m1, m2, k):
+
+    # Formula: omega = sqrt(k/m) = 2.0 * pi * v
+    # Use the c obtained in function cal_fc
+    # Unit of v: cm^-1
+
+    m = (m1 * m2) / (m1 + m2)
+    c = amu * (lspeed**2) / kcal2j * avg_cons * (10**-4)
+    v = sqrt(k/(c * m)) / (2.0 * pi)
+
+    return v
+
+def cal_Morse_v(D, a, m1, m2):
+
+    # Formula: v = a / (2*pi) * sqrt(2.0 * D / m)
+    # Which is from: https://en.wikipedia.org/wiki/Morse_potential
+
+    # Unit:        m^-1 * sqrt(kg * m^2 * s^-2 / kg) = s^-1
+    # Magnitude:   10^10 * sqrt(10^-23 / 10^-27)
+    #              = 10^12 s^-1 / [10^10 cm/s] = 100.0 cm^-1
+
+    m = (m1 * m2) / (m1 + m2)
+    c = sqrt((kcal2j/avg_cons) / amu) / lspeed * 100.0
+    v = c * a / (2.0*pi) * sqrt(2.0*D/m)
+
+    return v
+
+def cal_Morse_beta(D, v, m1, m2):
+
+    # Taking advantage the cal_Morse_v function
+    m = (m1 * m2) / (m1 + m2)
+    c = sqrt((kcal2j/avg_cons) / amu) / lspeed * 100.0
+    a = v  * (2.0*pi) / sqrt(2.0*D/m) / c
+
+    return a
 
 ###############################################################################
 #                              Reading and Writing

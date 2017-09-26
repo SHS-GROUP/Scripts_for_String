@@ -5,17 +5,17 @@ from kie_functions import *
 def test1():
     """Test the harmonic overlap"""
 
-    v1 = 1
-    v2 = 1
+    v1 = 0
+    v2 = 0
     freq1 = 2900.0
     freq2 = 3500.0
     d = 1.0
 
     hoverlap = cal_HO_Suv(v1, v2, freq1, freq2, d, hmass)
-    #doverlap = cal_HO_Suv(v1, v2, freq1, freq2, d, dmass)
+    doverlap = cal_HO_Suv(v1, v2, freq1, freq2, d, dmass)
 
-    print(hoverlap)
-    #print(hoverlap, doverlap)
+    #print(doverlap)
+    print(hoverlap, doverlap)
 
     # Results from WebPCET server:
     #         http://webpcet.scs.uiuc.edu:8080/webMathematica/webPCET/harmonic.jsp
@@ -155,11 +155,39 @@ def test6():
     #Results:
     #Experimental C-C vibrational frequency is ~1200 cm^-1
 
-#test1()
+def test7():
+    m = 1.0
+    n = 1
+    freq = 2900.0
+
+    k = cal_HO_k(m, freq)
+    print(k)
+
+    energy = cal_HO_ene2(freq, n)
+    print(energy)
+     
+    energy = cal_HO_ene1(k, m, n)
+    print(energy)
+
+def test8():
+    """Getting the force constants for former PCET work about SLO-1"""
+    k = cal_HO_k(110.0, 400.0)
+    print(k)
+    k = cal_HO_k(14.0, 353.0)
+    print(k)
+    k = cal_HO_k(100.0, 132.0)
+    print(k)
+    k = cal_HO_k(10.0, 368.2)
+    print(k)
+
+
+test1()
 #test2()
 #test3()
 #test4()
 #test5()
 #test6()
+#test7()
+#test8()
 
 quit()
