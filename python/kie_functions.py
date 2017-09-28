@@ -12,23 +12,37 @@ from scipy.misc import comb
 #system("module load mathematica/mathematica-11")
 #system("cp ~/Projs/PCET_code/MathPCETwithET.m .")
 
+"""
+# Constants from MathPCETwithET.m
+kb = 3.16683 * (10.0**-6) # Unit: Hatree/K, MathPCETwithET.m
+emass = 9.10938356 * (10**-31) # Unit: kg, from https://en.wikipedia.org/wiki/Electron_rest_mass
+Dalton = 1.0 / 5.485799090 * (10**4) # Unit: emass, from https://en.wikipedia.org/wiki/Electron_rest_mass
+hmass = 1.0072756064562605 # Unit: Dalton, From MathPCETwithET.m
+dmass = 2.0135514936645316 # Unit: Dalton, From MathPCETwithET.m
+tmass = 3.0160492 # Unit: Dalton, From MathPCETwithET.m
+"""
+
 # Constants
-amu = 1.660539040 #Unit: 10^-27 kg; atomic mass unit
-hbar = 1.0545718 #Unit: 10^-34 J*s
+amu = 1.660539040 #Unit: 10^-27 kg; atomic mass unit (Dalton), From https://en.wikipedia.org/wiki/Unified_atomic_mass_unit
+hbar = 1.0545718 #Unit: 10^-34 J*s; From https://en.wikipedia.org/wiki/Planck_constant
 h = hbar * 2.0 * pi
-avg_cons = 6.022140857 #Unit: 10^23/mol
-boltz_cons = 1.38064852 #Unit: 10^-23 J/K
-kcal2j = 4184.0 #Unitless
-lspeed = 2.99792458 #Unit: 10^10 cm/s
-bohr2a = 0.529177
+avg_cons = 6.022140857 #Unit: 10^23/mol, From https://en.wikipedia.org/wiki/Avogadro_constant
+boltz_cons = 1.38064852 #Unit: 10^-23 J/K, From https://en.wikipedia.org/wiki/Boltzmann_constant
+kcal2j = 4184.0 #Unitless, From https://en.wikipedia.org/wiki/Calorie
+lspeed = 2.99792458 #Unit: 10^10 cm/s, From https://en.wikipedia.org/wiki/Speed_of_light
+bohr2a = 0.52917721067 #Unit: Angstrom, From https://en.wikipedia.org/wiki/Bohr_radius
 
 kb = boltz_cons * avg_cons #J/K 10^-23 * 10^23 = 1.0
 kb = kb / kcal2j #Transfer from J/K to kcal/(mol*K)
 
-omass = 15.999
-cmass = 12.000
-hmass = 1.00726
-dmass = 2.01410
+omass = 15.99491461956 # Unit: Dalton, From https://en.wikipedia.org/wiki/Oxygen-16
+cmass = 12.0 # Unit: Dalton, From https://en.wikipedia.org/wiki/Carbon-12
+emass = 5.485799090 * (10**-4) # Unit: Dalton
+hmass = 1.007276466879 # Proton not hydrogen, Unit: Dalton, From https://en.wikipedia.org/wiki/Proton
+# Hydrogen mass: 1.007825 u, From https://en.wikipedia.org/wiki/Hydrogen_atom
+# 1.007825 - 5.485799090 * (10**-4) = 1.007276420091 u, agreed with the proton mass
+dmass = 2.01410178 - emass # Deuterium ion not neutral, Unit: Dalton, From https://en.wikipedia.org/wiki/Deuterium
+tmass = 3.0160492 - emass # Tritium ion not neutral, Unit: Dalton, From https://en.wikipedia.org/wiki/Tritium
 
 ###############################################################################
 #                                   Wavefunctions
@@ -322,6 +336,78 @@ def cal_HO_Suv(v1, v2, freq1, freq2, d, xmass):
 
     fcsum = fcsum * fac0
     return fcsum
+
+def cal_alpha(coeff, v1, v2, xmass, stepsize):
+    """Calculate the first derivative for the Morse wavefunctions overlap
+       intergral distance dependence"""
+
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+
+    Sm1 = cal_Suv(coeff_m1, v1, v2, xmass)
+    S = cal_Suv(coeff, v1, v2, xmass)
+    Sp1 = cal_Suv(coeff_p1, v1, v2, xmass)
+
+    der1 = (Sp1-Sm1) / (2.0 * stepsize)
+    a = - (1.0/S) * der1
+  
+    return a
+
+def cal_ab(coeff, v1, v2, xmass, stepsize):
+    """Calculate the first and second derivatives for the overlap intergral
+       distance dependence"""
+
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+
+    Sm1 = cal_Suv(coeff_m1, v1, v2, xmass)
+    S = cal_Suv(coeff, v1, v2, xmass)
+    Sp1 = cal_Suv(coeff_p1, v1, v2, xmass)
+
+    der1 = (Sp1-Sm1) / (2.0 * stepsize)
+    der2 = (Sp1+Sm1-2.0*S) / (stepsize**2)
+
+    a = - (1.0/S) * der1
+    b = - 2.0 * (S * der2 - der1**2) / S**2
+
+    return a, b
+
+def cal_HO_alpha(v1, v2, freq1, freq2, d, xmass, stepsize):
+    """Calculate the first derivative for the Harmonic Oscillator wavefunctions
+       overlap intergral distance dependence"""
+
+    dm1 = d - stepsize
+    dp1 = d + stepsize
+
+    Sm1 = cal_HO_Suv(v1, v2, freq1, freq2, dm1, xmass)
+    S = cal_HO_Suv(v1, v2, freq1, freq2, d, xmass)
+    Sp1 = cal_HO_Suv(v1, v2, freq1, freq2, dp1, xmass)
+
+    der1 = (Sp1-Sm1) / (2.0 * stepsize)
+    a = - (1.0/S) * der1
+
+    return a
+
+def cal_HO_ab(v1, v2, freq1, freq2, d, xmass, stepsize):
+    """Calculate the first and second derivatives for the Harmonic Oscillator
+       wavefunctions overlap intergral distance dependence"""
+
+    dm1 = d - stepsize
+    dp1 = d + stepsize
+
+    Sm1 = cal_HO_Suv(v1, v2, freq1, freq2, dm1, xmass)
+    S = cal_HO_Suv(v1, v2, freq1, freq2, d, xmass)
+    Sp1 = cal_HO_Suv(v1, v2, freq1, freq2, dp1, xmass)
+
+    der1 = (Sp1-Sm1) / (2.0 * stepsize)
+    der2 = (Sp1+Sm1-2.0*S) / (stepsize**2)
+
+    a = - (1.0/S) * der1
+    b = - 2.0 * (S * der2 - der1**2) / S**2
+
+    return a, b
 
 def cal_OH_Suv_math(v1, v2, freq1, freq2, d, xmass):
     pass
