@@ -46,7 +46,85 @@ def get_Ubiasl(data_dict, num_sims, dim):
     return Ubiasl
 
 ###############################################################################
-#           The first part is about each image, USUALLY NOT USED
+#                    This part is about the WHAM iteration
+###############################################################################
+
+def wham_iter(num_sims, wham_conv, data_dict, Ubiasl):
+
+    start_time = time.time()
+
+    #WHAM iteration
+    Fx_old = [0.0 for i in xrange(num_sims)]
+    Fx_prog = []
+    iter = 0
+    change = 999.0
+
+    while change > wham_conv:
+        # This part is based on the equations 12-15 on the paper
+        # of Souaille and Roux on Computer Physics Communications
+        # 2001, 135, 40-57
+        # Another reference:
+        # http://membrane.urmc.rochester.edu/sites/default/files/wham/wham_talk.pdf
+        expFx_old = [exp(i/KbT) for i in Fx_old]
+
+        Fx = [0.0 for i in xrange(num_sims)] #Initial free energy
+        kk=0 #A number to count
+
+        """
+        #The code from the WHAM paper
+        for k in xrange(0, num_sims):
+            ebfk = 0.0
+            for i in xrange(0, num_sims):
+                data_per_sim = len(data_dict[i+1].data)
+                for l in xrange(0, data_per_sim):
+                    bottom = 0.0
+                    for j in xrange(0, num_sims):
+                        bottom = Ubiasl[kk] * expFx_old[j]
+                    ebfk = ebfk + Ubiasl[kk]/bottom"""
+
+        for i in xrange(0, num_sims): #Sum over big N for i
+            data_per_sim = len(data_dict[i+1].data) 
+            for l in xrange(0, data_per_sim): #Sum over little n for l
+                denom = 0.0 # Obtain the denominator
+                Ubiasl_j = []
+                for j in xrange(num_sims):
+                   data_per_sim2 = len(data_dict[j+1].data)
+                   #denom = denom + Ubiasl[kk] * expFx_old[j]
+                   denom = denom + float(data_per_sim2) * Ubiasl[kk] * expFx_old[j]
+                   Ubiasl_j.append(Ubiasl[kk])
+                   kk = kk + 1
+                denom = 1.0/denom
+                for k in xrange(num_sims):
+                    Fx[k] = Fx[k] + Ubiasl_j[k] * denom
+
+        #Get the updated probability
+        Fx = [-KbT*log(Fx[i]) for i in xrange(num_sims)] #Transfer the probability into free energy
+        Fx0 = Fx[0] #Normalize the Fx values
+        Fx = [Fx[i]-Fx0 for i in xrange(num_sims)]
+        Fx_old = Fx #Assign the Fx as Fx_old
+ 
+        if iter <= 1:
+            Fx_prog = Fx_prog + Fx
+        else:
+            Fx_prog = Fx_prog + Fx
+            Fx_last = Fx_prog[-num_sims:]
+            Fx_last2 = Fx_prog[-2*num_sims:-num_sims]
+            Fx_diff = [abs(Fx_last[i] - Fx_last2[i]) for i in range(0, num_sims)]
+            change = max(Fx_diff)
+        iter = iter + 1
+
+    expFx = [exp(i/KbT) for i in Fx]
+    write_list('Fx.dat', Fx, num_sims)
+    write_list('Fx_prog.dat', Fx_prog, num_sims)
+
+    cost_time = time.time() - start_time
+    print("%d Iterations were taken!" %(iter))
+    print("It costs %f seconds to finish the WHAM cycle!" %cost_time)
+
+    return expFx
+
+###############################################################################
+#                    The first part is about each window
 ###############################################################################
 def plot_wind_avg(x_list, avg_val, xlabel, ylabel, figname):
 
@@ -108,6 +186,31 @@ def gene_wind_avg(data_dict, num_sims, dim, expFx, Ubiasl, avg=1, tot_ene=[], en
 ###############################################################################
 #                    The second part is about one dimension
 ###############################################################################
+def plot_string_1D(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, figname):
+
+    color_dict = get_color_dict(dim)
+    x = range(1, num_imgs+1) # X axis for plotting
+    for i in range(1, dim+1):
+        y1 = [] # Y axis for constraints
+        y2 = [] # Y axis for plotting
+        yerr = [] # Error bar for plotting
+        clr = color_dict[i]
+        for j in range(ini_wind, final_wind+1):
+            y1.append(data_dict[j].equ_dis[i-1])
+            avgi = data_dict[j].avg[i-1]
+            y2.append(avgi)
+            stdi = data_dict[j].std[i-1]
+            yerr.append(stdi)
+        plt.plot(x, y1, color=clr, linestyle='--')
+        plt.plot(x, y2, color=clr, linestyle='-', linewidth=2.0, label=react_paths[i-1])
+        plt.errorbar(x, y2, yerr=yerr, ecolor=clr, capsize=2.0, capthick=2.0, barsabove=True)
+        plt.legend(bbox_to_anchor=(0.0, 1.02, 1.0, 0.102), loc=3, ncol=2, mode="expand", borderaxespad=0.0)
+    plt.ylabel('Distance (Angstrom)')
+    plt.xlabel('Number of Images')
+    plt.xticks(x)
+    plt.savefig(figname)
+    plt.close()
+
 def plot_free_ene_1D(num_bins, Prob_RC, xaxis_RC, figname, rc_label, avg=0, count=0):
 
     global KbT
@@ -570,105 +673,6 @@ def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
 ###############################################################################
                               #The WHAM iteration
 ###############################################################################
-
-def plot_string_1D(num_imgs, dim, data_dict, ini_wind, final_wind, react_paths, figname): 
- 
-    color_dict = get_color_dict(dim) 
-    x = range(1, num_imgs+1) # X axis for plotting 
-    for i in range(1, dim+1): 
-        y1 = [] # Y axis for constraints 
-        y2 = [] # Y axis for plotting 
-        yerr = [] # Error bar for plotting 
-        clr = color_dict[i] 
-        for j in range(ini_wind, final_wind+1): 
-            y1.append(data_dict[j].equ_dis[i-1]) 
-            avgi = data_dict[j].avg[i-1] 
-            y2.append(avgi) 
-            stdi = data_dict[j].std[i-1] 
-            yerr.append(stdi) 
-        plt.plot(x, y1, color=clr, linestyle='--') 
-        plt.plot(x, y2, color=clr, linestyle='-', linewidth=2.0, label=react_paths[i-1]) 
-        plt.errorbar(x, y2, yerr=yerr, ecolor=clr, capsize=2.0, capthick=2.0, barsabove=True) 
-        plt.legend(bbox_to_anchor=(0.0, 1.02, 1.0, 0.102), loc=3, ncol=2, mode="expand", borderaxespad=0.0) 
-    plt.ylabel('Distance (Angstrom)') 
-    plt.xlabel('Number of Images') 
-    plt.xticks(x) 
-    plt.savefig(figname) 
-    plt.close()
-
-def wham_iter(num_sims, wham_conv, data_dict, Ubiasl):
-
-    start_time = time.time()
-
-    #WHAM iteration
-    Fx_old = [0.0 for i in xrange(num_sims)]
-    Fx_prog = []
-    iter = 0
-    change = 999.0
-
-    while change > wham_conv:
-        # This part is based on the equations 12-15 on the paper
-        # of Souaille and Roux on Computer Physics Communications
-        # 2001, 135, 40-57
-        # Another reference:
-        # http://membrane.urmc.rochester.edu/sites/default/files/wham/wham_talk.pdf
-        expFx_old = [exp(i/KbT) for i in Fx_old]
-
-        Fx = [0.0 for i in xrange(num_sims)] #Initial free energy
-        kk=0 #A number to count
-
-        """
-        #The code from the WHAM paper
-        for k in xrange(0, num_sims):
-            ebfk = 0.0
-            for i in xrange(0, num_sims):
-                data_per_sim = len(data_dict[i+1].data)
-                for l in xrange(0, data_per_sim):
-                    bottom = 0.0
-                    for j in xrange(0, num_sims):
-                        bottom = Ubiasl[kk] * expFx_old[j]
-                    ebfk = ebfk + Ubiasl[kk]/bottom"""
-
-        for i in xrange(0, num_sims): #Sum over big N for i
-            data_per_sim = len(data_dict[i+1].data) 
-            for l in xrange(0, data_per_sim): #Sum over little n for l
-                denom = 0.0 # Obtain the denominator
-                Ubiasl_j = []
-                for j in xrange(num_sims):
-                   data_per_sim2 = len(data_dict[j+1].data)
-                   #denom = denom + Ubiasl[kk] * expFx_old[j]
-                   denom = denom + float(data_per_sim2) * Ubiasl[kk] * expFx_old[j]
-                   Ubiasl_j.append(Ubiasl[kk])
-                   kk = kk + 1
-                denom = 1.0/denom
-                for k in xrange(num_sims):
-                    Fx[k] = Fx[k] + Ubiasl_j[k] * denom
-
-        #Get the updated probability
-        Fx = [-KbT*log(Fx[i]) for i in xrange(num_sims)] #Transfer the probability into free energy
-        Fx0 = Fx[0] #Normalize the Fx values
-        Fx = [Fx[i]-Fx0 for i in xrange(num_sims)]
-        Fx_old = Fx #Assign the Fx as Fx_old
- 
-        if iter <= 1:
-            Fx_prog = Fx_prog + Fx
-        else:
-            Fx_prog = Fx_prog + Fx
-            Fx_last = Fx_prog[-num_sims:]
-            Fx_last2 = Fx_prog[-2*num_sims:-num_sims]
-            Fx_diff = [abs(Fx_last[i] - Fx_last2[i]) for i in range(0, num_sims)]
-            change = max(Fx_diff)
-        iter = iter + 1
-
-    expFx = [exp(i/KbT) for i in Fx]
-    write_list('Fx.dat', Fx, num_sims)
-    write_list('Fx_prog.dat', Fx_prog, num_sims)
-
-    cost_time = time.time() - start_time
-    print("%d Iterations were taken!" %(iter))
-    print("It costs %f seconds to finish the WHAM cycle!" %cost_time)
-
-    return expFx
 
 def wham(dirpath, dim, react_paths, first_num_imgs, num_cycles, wham_conv, btstrap=0,
          read_Fx="", read_Ubiasl=""):
