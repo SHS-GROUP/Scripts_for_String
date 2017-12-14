@@ -7,13 +7,18 @@ from matplotlib import pyplot as plt
 from optparse import OptionParser
 from kie_functions import *
 
-parser = OptionParser("Usage: cal_kie.py -f R1_free_ene_file -c code_mode -m Morse_mode")
+parser = OptionParser("Usage: cal_kie.py -f R1_free_ene_file -c code_mode -p para_file [-w Wavefunction]")
+
+parser.set_defaults(cmode='python', wfn='Morse')
+
 parser.add_option("-f", dest="r1fef", type='string',
                   help="R1 free energy file")
 parser.add_option("-c", dest="cmode", type='string',
                   help="Code mode (math or python)")
 parser.add_option("-p", dest="pfile", type='string',
                   help="Morse potential file")
+parser.add_option("-w", dest="wfn", type='string',
+                  help="Wavefunction")
 (options, args) = parser.parse_args()
 
 ###############################################################################
@@ -41,22 +46,39 @@ R_list = read_list(options.r1fef, 1)
 dR = R_list[1] - R_list[0]
 WR_list = read_list(options.r1fef, 2)
 para_list = read_para_file(options.pfile)
+
+# para_list for Morse: R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el
+# para_list for HO: R, freq1, req1, freq2, req2, dG0, V_el
+
 umax = 3
 vmax = 3
 Qm1 = 1.0
 
 # Get the parition function parameter
 T = 1000.0 / WT_HT_list[temp2fit]
-k_h, k_d = get_ks(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, 1)
+
+if options.wfn.lower() == "morse":
+    k_h, k_d = get_ks_Morse(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, 1)
+elif options.wfn.lower() == "ho":
+    k_h, k_d = get_ks_HO(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, 1)
+
 Qm1 = WT_Hrate_list[temp2fit] / k_h
 
 # Get the lowest temperature
 T = 1000.0 / WT_HT_list[0]
-k_h, k_d = get_ks(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+
+if options.wfn.lower() == "morse":
+    k_h, k_d = get_ks_Morse(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+elif options.wfn.lower() == "ho":
+    k_h, k_d = get_ks_HO(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
 
 # Get the highest temperature
 T = 1000.0 / WT_HT_list[-1]
-k_h, k_d = get_ks(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+
+if options.wfn.lower() == "morse":
+    k_h, k_d = get_ks_Morse(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+elif options.wfn.lower() == "ho":
+    k_h, k_d = get_ks_HO(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
 
 # Calculate rates and KIE for various temperatures
 Hrate_vsT = []
@@ -66,7 +88,12 @@ KIE_vsT = []
 #print('%7s %7s %7s %7s' %('Temper.', 'Rate_H', 'Rate_D', 'KIE'))
 for i in xrange(len(WT_HT_list)):
     T = 1000.0 / WT_HT_list[i]
-    k_h, k_d = get_ks(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+
+    if options.wfn.lower() == "morse":
+        k_h, k_d = get_ks_Morse(options.cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+    elif options.wfn.lower() == "ho":
+        k_h, k_d = get_ks_HO(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1)
+
     kie = k_h/k_d
 
     #print('%7.3e %7.3e %7.3e %7.3e' %(T, k_h, k_d, kie))

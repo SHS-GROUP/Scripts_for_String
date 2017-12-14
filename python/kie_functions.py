@@ -6,8 +6,12 @@ from numpy import trapz, inf, real, exp
 from scipy.special import eval_genlaguerre as elag
 from scipy.special import kn, hermite
 from numpy.polynomial.hermite import hermval
+from numpy import polyfit
 from scipy.integrate import quad
 from scipy.misc import comb
+from string_functions import read_list, read_2d_free_energy
+from matplotlib import pyplot as plt
+from numpy import polyfit, polyval, linspace
 
 #system("module load mathematica/mathematica-11")
 #system("cp ~/Projs/PCET_code/MathPCETwithET.m .")
@@ -21,6 +25,8 @@ hmass = 1.0072756064562605 # Unit: Dalton, From MathPCETwithET.m
 dmass = 2.0135514936645316 # Unit: Dalton, From MathPCETwithET.m
 tmass = 3.0160492 # Unit: Dalton, From MathPCETwithET.m
 """
+# Set the lamada
+lamb = 17.7
 
 # Constants
 amu = 1.660539040 #Unit: 10^-27 kg; atomic mass unit (Dalton), From https://en.wikipedia.org/wiki/Unified_atomic_mass_unit
@@ -45,7 +51,7 @@ dmass = 2.01410178 - emass # Deuterium ion not neutral, Unit: Dalton, From https
 tmass = 3.0160492 - emass # Tritium ion not neutral, Unit: Dalton, From https://en.wikipedia.org/wiki/Tritium
 
 ###############################################################################
-#                                   Wavefunctions
+#                         Wavefunctions for Morse potentials
 ###############################################################################
 def cal_wfn(D, m, a, r, re, n):
     #NOT USED!
@@ -107,7 +113,11 @@ def cal_wfn0(D, m, a, r, re):
 #           Overlap integral between two wavefunctions
 ###############################################################################
 
-def cal_Suv_trapz(coeff, u, v, xmass):
+##
+## Morse wavefunctions
+##
+
+def cal_Morse_Suv_trapz(coeff, u, v, xmass):
     #NOT USED!
     """Calculate the overlap integral square between donor-H and acceptor-H
        wavefunctions"""
@@ -134,7 +144,7 @@ def cal_Suv_trapz(coeff, u, v, xmass):
     #print('%7.1f %d %d %10.4e' %(R, u, v, Suv))
     return Suv
 
-def cal_Suv_Sym(D, m, a, R, u, v):
+def cal_Morse_Suv_Sym(D, m, a, R, u, v):
     #NOT USED!
     """Referred from equation 3.5 in the following paper:
     Anharmonicity effects in atom group transfer processes in condensed phases.
@@ -176,7 +186,7 @@ def cal_Suv_Sym(D, m, a, R, u, v):
     Suv = 4.0 * temp_fac0 * (Suv_pre**2)
     return Suv
 
-def cal_Suv_math(coeff, u, v, xmass):
+def cal_Morse_Suv_math(coeff, u, v, xmass):
     """Calculate the overlap integral square between donor-H and acceptor-H
        wavefunctions based on the Mathmatica code"""
 
@@ -203,7 +213,7 @@ def cal_Suv_math(coeff, u, v, xmass):
 def integer(x, k1, k2, y1, y2, a):
     return x**(k1+a*k2-1.0)*exp(-1.0/2.0*(y1*x+y2*(x**a)))
 
-def cal_Suv(coeff, v1, v2, xmass):
+def cal_Morse_Suv(coeff, v1, v2, xmass):
     """Calculate the overlap integral square between donor-H and acceptor-H
        wavefunctions based on python code,
        Corresponding to MorseOverlap in MathPCETwithET.m,
@@ -272,6 +282,47 @@ def cal_Suv(coeff, v1, v2, xmass):
     #fcsum = real(fcsum)
     return fcsum
 
+def cal_Morse_alpha(coeff, v1, v2, xmass, stepsize):
+    """Calculate the first derivative for the Morse wavefunctions overlap
+       intergral distance dependence"""
+
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+
+    Sm1 = cal_Morse_Suv(coeff_m1, v1, v2, xmass)
+    S = cal_Morse_Suv(coeff, v1, v2, xmass)
+    Sp1 = cal_Morse_Suv(coeff_p1, v1, v2, xmass)
+
+    der1 = (Sp1-Sm1) / (2.0 * stepsize)
+    a = - (1.0/S) * der1
+  
+    return a
+
+def cal_Morse_ab(coeff, v1, v2, xmass, stepsize):
+    """Calculate the first and second derivatives for the overlap intergral
+       distance dependence"""
+
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+
+    Sm1 = cal_Morse_Suv(coeff_m1, v1, v2, xmass)
+    S = cal_Morse_Suv(coeff, v1, v2, xmass)
+    Sp1 = cal_Morse_Suv(coeff_p1, v1, v2, xmass)
+
+    der1 = (Sp1-Sm1) / (2.0 * stepsize)
+    der2 = (Sp1+Sm1-2.0*S) / (stepsize**2)
+
+    a = - (1.0/S) * der1
+    b = - 2.0 * (S * der2 - der1**2) / S**2
+
+    return a, b
+
+##
+## Harmonic Oscillators
+##
+
 def Hermite(n, x):
 
     cn = []
@@ -337,43 +388,6 @@ def cal_HO_Suv(v1, v2, freq1, freq2, d, xmass):
     fcsum = fcsum * fac0
     return fcsum
 
-def cal_alpha(coeff, v1, v2, xmass, stepsize):
-    """Calculate the first derivative for the Morse wavefunctions overlap
-       intergral distance dependence"""
-
-    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
-    coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
-    coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
-
-    Sm1 = cal_Suv(coeff_m1, v1, v2, xmass)
-    S = cal_Suv(coeff, v1, v2, xmass)
-    Sp1 = cal_Suv(coeff_p1, v1, v2, xmass)
-
-    der1 = (Sp1-Sm1) / (2.0 * stepsize)
-    a = - (1.0/S) * der1
-  
-    return a
-
-def cal_ab(coeff, v1, v2, xmass, stepsize):
-    """Calculate the first and second derivatives for the overlap intergral
-       distance dependence"""
-
-    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
-    coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
-    coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
-
-    Sm1 = cal_Suv(coeff_m1, v1, v2, xmass)
-    S = cal_Suv(coeff, v1, v2, xmass)
-    Sp1 = cal_Suv(coeff_p1, v1, v2, xmass)
-
-    der1 = (Sp1-Sm1) / (2.0 * stepsize)
-    der2 = (Sp1+Sm1-2.0*S) / (stepsize**2)
-
-    a = - (1.0/S) * der1
-    b = - 2.0 * (S * der2 - der1**2) / S**2
-
-    return a, b
-
 def cal_HO_alpha(v1, v2, freq1, freq2, d, xmass, stepsize):
     """Calculate the first derivative for the Harmonic Oscillator wavefunctions
        overlap intergral distance dependence"""
@@ -413,8 +427,12 @@ def cal_OH_Suv_math(v1, v2, freq1, freq2, d, xmass):
     pass
 
 ###############################################################################
-#                                   Energies
+#                         Energies based on wavefunctions
 ###############################################################################
+
+#
+# For Morse potentials
+#
 
 def cal_Morse_ene(D, m, a, n):
     """Corresponding to MorseEnergy in MathPCETwithET.m,
@@ -493,11 +511,17 @@ def cal_Morse_ene_math(D, m, a, n):
 
     return En
 
+#
+# For Harmonic Oscillators
+#
+
 def cal_HO_ene1(k, m, n):
     """Corresponding to HOEnergy in MathPCETwithET.m"""
 
-    # k in unit as kcal/(mol*A^2)
-    # m in unit as amu
+    # k is the force constant, in unit as kcal/(mol*A^2)
+    # m is the reduced mass, in unit as amu
+    # n is the state number
+
     # omega = sqrt(k/m)
     # omega = 2*pi*v0
     # v0 = sqrt(k/m) / (2*pi)  unit: s^-1
@@ -514,6 +538,9 @@ def cal_HO_ene1(k, m, n):
 def cal_HO_ene2(v, n):
     """Corresponding to HOEnergy in MathPCETwithET.m"""
 
+    # v is frequency, in unit of cm^-1
+    # n the state number
+
     # v in unit as cm^-1, omega = 2pi * v
     # hv = h * v = hbar * omega
     # Magnitude: 10^-34 * 10^23 * 10^10 = 0.1
@@ -525,10 +552,18 @@ def cal_HO_ene2(v, n):
 def cal_HO_ene_math(freq, n):
     pass
 
+#
+# Normalize the probability based on the energy levels
+#
+
 def norm_prob(ene_list, kb, T):
     """Normalized the probablity based on Boltzmann distribution"""
+
+    # Normalize the energy list
     ene0 = min(ene_list)
     ene_list2 = [i - ene0 for i in ene_list]
+
+    # Transfer the energies to probabilities
     prob = [exp(-i/(kb*T)) for i in ene_list2]
     probsum = sum(prob)
     prob = [i/probsum for i in prob]
@@ -538,7 +573,7 @@ def norm_prob(ene_list, kb, T):
 #               Rate constants for Harmonic Oscillator wavefunctions
 ###############################################################################
 
-def cal_HO_kuv_R(coeff, u, v, xmass, kb, T):
+def cal_kuv_R_HO(coeff, u, v, xmass, kb, T):
     """Calculate the kuv for R"""
 
     R, freq1, req1, freq2, req2, dG0, V_el = coeff
@@ -557,7 +592,9 @@ def cal_HO_kuv_R(coeff, u, v, xmass, kb, T):
     #      = (kcal/mol) / (J*s) = J / (J*s) = s^-1
     # Magnitude: (10^-23 / 10^-34) = 10^11 s^-1
 
-    lamb = 13.4 #kcal/mol, re-oragnization energy
+    global lamb
+
+    #lamb = 13.4 #kcal/mol, re-oragnization energy
     c = (kcal2j / avg_cons) * (1.0 / hbar)
     Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
     dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
@@ -566,7 +603,7 @@ def cal_HO_kuv_R(coeff, u, v, xmass, kb, T):
     kuv_R = kuv_R * (10.0**11) #unit s^-1
     return kuv_R
 
-def cal_HO_kR(coeff, umax, vmax, xmass, kb, T):
+def cal_kR_HO(coeff, umax, vmax, xmass, kb, T):
     """Calculate the k for R, up to umax and vmax"""
 
     R, freq1, req1, freq2, req2, dG0, V_el = coeff
@@ -579,11 +616,11 @@ def cal_HO_kR(coeff, umax, vmax, xmass, kb, T):
     k_R = 0.0
     for u in xrange(0, umax+1):
         for v in xrange(0, vmax+1):
-            kuv_R = cal_HO_kuv_R(coeff, u, v, xmass, kb, T)
+            kuv_R = cal_kuv_R_HO(coeff, u, v, xmass, kb, T)
             k_R += Pu[u] * kuv_R
     return k_R
 
-def get_HO_ks(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, print_per=0):
+def get_ks_HO(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, print_per=0):
     #
     # Get the parition function parameter
     #
@@ -593,8 +630,8 @@ def get_HO_ks(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, 
     for j in xrange(0, len(R_list)):
         R = R_list[j]
         coeff = para_list[j]
-        kR_h = cal_HO_kR(coeff, umax, vmax, hmass, kb, T)
-        kR_d = cal_HO_kR(coeff, umax, vmax, dmass, kb, T)
+        kR_h = cal_kR_HO(coeff, umax, vmax, hmass, kb, T)
+        kR_d = cal_kR_HO(coeff, umax, vmax, dmass, kb, T)
         k_h_list.append(kR_h * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
         k_d_list.append(kR_d * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
     k_h = sum(k_h_list)
@@ -615,7 +652,7 @@ def get_HO_ks(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, 
 #                     Rate constants for Morse wavefunctions
 ###############################################################################
 
-def cal_kuv_R(coeff, u, v, xmass, cmode, kb, T):
+def cal_kuv_R_Morse(coeff, u, v, xmass, cmode, kb, T):
     """Calculate the kuv for R"""
 
     R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
@@ -625,11 +662,11 @@ def cal_kuv_R(coeff, u, v, xmass, cmode, kb, T):
     if cmode == 'python':
         Eu = cal_Morse_ene(D_ch, xmass, beta_ch, u)
         Ev = cal_Morse_ene(D_oh, xmass, beta_oh, v)
-        Suv = cal_Suv(coeff, u, v, xmass)
+        Suv = cal_Morse_Suv(coeff, u, v, xmass)
     elif cmode == 'math':
         Eu = cal_Morse_ene_math(D_ch, xmass, beta_ch, u)
         Ev = cal_Morse_ene_math(D_oh, xmass, beta_oh, v)
-        Suv = cal_Suv_math(coeff, u, v, xmass)
+        Suv = cal_Morse_Suv_math(coeff, u, v, xmass)
 
     #Calculate the rate constat for kuv for R
 
@@ -638,7 +675,9 @@ def cal_kuv_R(coeff, u, v, xmass, cmode, kb, T):
     #      = (kcal/mol) / (J*s) = J / (J*s) = s^-1
     # Magnitude: (10^-23 / 10^-34) = 10^11 s^-1
 
-    lamb = 13.4 #kcal/mol, re-oragnization energy
+    global lamb
+    #lamb = 13.4 #kcal/mol, re-oragnization energy
+
     c = (kcal2j / avg_cons) * (1.0 / hbar)
     Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
     dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
@@ -647,7 +686,7 @@ def cal_kuv_R(coeff, u, v, xmass, cmode, kb, T):
     kuv_R = kuv_R * (10.0**11) #unit s^-1
     return kuv_R
 
-def cal_kR(coeff, umax, vmax, xmass, cmode, kb, T):
+def cal_kR_Morse(coeff, umax, vmax, xmass, cmode, kb, T):
     """Calculate the k for R, up to umax and vmax"""
 
     #global cmass
@@ -664,11 +703,11 @@ def cal_kR(coeff, umax, vmax, xmass, cmode, kb, T):
     k_R = 0.0
     for u in xrange(0, umax+1):
         for v in xrange(0, vmax+1):
-            kuv_R = cal_kuv_R(coeff, u, v, xmass, cmode, kb, T)
+            kuv_R = cal_kuv_R_Morse(coeff, u, v, xmass, cmode, kb, T)
             k_R += Pu[u] * kuv_R
     return k_R
 
-def get_ks(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, print_per=0):
+def get_ks_Morse(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, print_per=0):
     #
     # Get the parition function parameter
     #
@@ -678,8 +717,8 @@ def get_ks(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Q
     for j in xrange(0, len(R_list)):
         R = R_list[j]
         coeff = para_list[j]
-        kR_h = cal_kR(coeff, umax, vmax, hmass, cmode, kb, T)
-        kR_d = cal_kR(coeff, umax, vmax, dmass, cmode, kb, T)
+        kR_h = cal_kR_Morse(coeff, umax, vmax, hmass, cmode, kb, T)
+        kR_d = cal_kR_Morse(coeff, umax, vmax, dmass, cmode, kb, T)
         k_h_list.append(kR_h * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
         k_d_list.append(kR_d * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
     k_h = sum(k_h_list)
@@ -697,8 +736,182 @@ def get_ks(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Q
     return k_h, k_d
 
 ###############################################################################
+#                     Rate constants for general potentials
+###############################################################################
+
+##
+## Fourier Grid Hamiltonian method with B-spline
+##
+
+def cal_kR_bspline(R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
+
+    # Generate a potential plot for target R (Rt)
+    Rpl = read_list(rdatf, 1)
+    P1l = read_list(rdatf, 4)
+    P2l = read_list(rdatf, 6)
+
+    Rpl1 = [(Rp - (Rt - R) / 2.0) for Rp in Rpl]
+    Rpl2 = [(Rp + (Rt - R) / 2.0) for Rp in Rpl]
+
+    minval = min(Rpl1)
+    maxval = max(Rpl2)
+    Rpl_new = linspace(minval, maxval, 20)
+
+    pcoef1 = polyfit(Rpl1, P1l, 10)
+    pcoef2 = polyfit(Rpl2, P2l, 10)
+
+    P1_fit = [polyval(pcoef1, i) for i in Rpl_new]
+    P2_fit = [polyval(pcoef2, i) for i in Rpl_new]
+
+    datf = outf + '.dat' # The file used for data
+    with open(datf, 'w') as f:
+        for i in xrange(0, 20):
+            print('%5.2f %13.7f %13.7f' %(Rpl_new[i], P1_fit[i], P2_fit[i]), file=f)
+
+    # Perform the calculation with the fortran code and then read the output files
+    mass = 1822.8900409014022
+    if hydrogen.lower() == 'p':
+        mass = mass * 1.0072756064562605
+    elif hydrogen.lower() == 'd':
+        mass = mass * 2.0135514936645316
+
+    smax = max([umax, vmax])
+    system('/share/apps/bspline/bin/fgh_bspline.bin %s %d %10.5f %d > /dev/null ' %(datf, npots, mass, smax))
+
+    overlapf = outf + '_overlaps.dat'
+    overlap = read_2d_free_energy(overlapf)
+    
+    reac_enef = outf + '_reactant_en.dat'
+    Eu_list = read_2d_free_energy(reac_enef)
+    Eu_list = Eu_list[0]
+
+    prod_enef = outf + '_product_en.dat'
+    Ev_list = read_2d_free_energy(prod_enef)
+    Ev_list = Ev_list[0]
+
+    #
+    # Calculate the k at certain R
+    #
+
+    # Normalize the probabilities
+    Pu = norm_prob(Eu_list, kb, T)
+    k_R = 0.0
+    V_el = 4.5
+
+    for u in xrange(0, umax):
+        for v in xrange(0, vmax):
+            Eu = Eu_list[u]
+            Ev = Ev_list[v]
+            Suv = overlap[u][v]
+            #print(Suv)
+
+            global lamb
+            #lamb = 13.4 #kcal/mol, re-oragnization energy
+            c = (kcal2j / avg_cons) * (1.0 / hbar)
+            Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
+            dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
+            kuv_R = Prefac * (Suv**2) * exp(-dGuv) #unit 10^11 s^-1
+            kuv_R = kuv_R * (10.0**11) #unit s^-1
+            k_R += Pu[u] * kuv_R
+
+    return k_R
+
+    """"
+    Rp1 = Rpl[P1l.index(min(P1l))]
+    Rp2 = Rpl[P2l.index(min(P2l))]
+
+    Rchl = []
+    Rohl = []
+    for Rp in Rpl:
+        Rch = R/2.0 + Rp  # Herein Rp = (Rch - Roh)/2.0; R = Rch + Roh
+        Roh = R/2.0 - Rp  # So Rch = R/2.0 + Rp; Roh = R/2.0 - Rp
+        Rchl.append(Rch)
+        Rohl.append(Roh)
+
+    Rp_min = (min(Rchl) - max(Rohl))/2.0
+    Rp_max = (max(Rchl) - min(Rohl))/2.0
+
+    plt.plot(Rpl, P1l, 'ro')
+    plt.plot(Rpl, P2l, 'bo')
+    plt.plot(Rpl1, P1l, 'r^')
+    plt.plot(Rpl2, P2l, 'b^')
+    plt.plot(Rpl_new, P1_fit, 'r-')
+    plt.plot(Rpl_new, P2_fit, 'b-')
+    plt.savefig('test.pdf')
+    plt.close()
+
+    #plt.plot(Rohl, P2l, 'b')
+    #plt.savefig('right.pdf')
+    #plt.close()
+    """
+
+def get_ks_bspline(R_list, WR_list, kb, T, dG0, umax, vmax, npots, Qm1=1.0, print_per=0):
+    #
+    # Get the parition function parameter
+    #
+
+    cdft_file = '/home/pengfeil/Projs/SLO_QM/cdft-results-from-alexander/cdft-pt-profiles-RTS.dat'
+
+    k_h_list = []
+    k_d_list = []
+
+    PR_list = norm_prob(WR_list, kb, T)
+    for j in xrange(0, len(R_list)):
+        R = R_list[j]
+        kR_h = cal_kR_bspline(2.6, cdft_file, R, '_temp_bspline', 'p', kb, T, dG0, umax, vmax, npots)
+        kR_d = cal_kR_bspline(2.6, cdft_file, R, '_temp_bspline', 'd', kb, T, dG0, umax, vmax, npots)
+                           # (R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
+        k_h_list.append(kR_h * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
+        k_d_list.append(kR_d * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
+    k_h = sum(k_h_list)
+    k_d = sum(k_d_list)
+
+    #print(k_h_list)
+    #print(k_d_list)
+
+    if print_per != 0:
+        print("Percentage of %7.1f K" %T)
+        print("R", "H_rate", "D_rate")
+        for j in xrange(0, len(R_list)):
+            print('%6.3f %5.2f %5.2f' %(R_list[j], 100.0 * k_h_list[j]/k_h, 100.0 * k_d_list[j]/k_d))
+
+    return k_h_list, k_d_list, k_h, k_d
+
+###############################################################################
 #                              Simple calculations
 ###############################################################################
+
+#
+# For Morse potentials
+#
+
+def cal_Morse_v(D, a, m1, m2):
+
+    # Formula: v = a / (2*pi) * sqrt(2.0 * D / m)
+    # Which is from: https://en.wikipedia.org/wiki/Morse_potential
+
+    # Unit:        m^-1 * sqrt(kg * m^2 * s^-2 / kg) = s^-1
+    # Magnitude:   10^10 * sqrt(10^-23 / 10^-27)
+    #              = 10^12 s^-1 / [10^10 cm/s] = 100.0 cm^-1
+
+    m = (m1 * m2) / (m1 + m2)
+    c = sqrt((kcal2j/avg_cons) / amu) / lspeed * 100.0
+    v = c * a / (2.0*pi) * sqrt(2.0*D/m)
+
+    return v
+
+def cal_Morse_beta(D, v, m1, m2):
+
+    # Taking advantage the cal_Morse_v function
+    m = (m1 * m2) / (m1 + m2)
+    c = sqrt((kcal2j/avg_cons) / amu) / lspeed * 100.0
+    a = v  * (2.0*pi) / sqrt(2.0*D/m) / c
+
+    return a
+
+#
+# For Harmonic oscillators
+#
 
 def cal_HO_k(m1, m2, v):
 
@@ -725,29 +938,16 @@ def cal_HO_v(m1, m2, k):
 
     return v
 
-def cal_Morse_v(D, a, m1, m2):
+#
+# Return fitted force constant and equilibrium distance
+#
 
-    # Formula: v = a / (2*pi) * sqrt(2.0 * D / m)
-    # Which is from: https://en.wikipedia.org/wiki/Morse_potential
+def cal_quad_k(rl, enel):
 
-    # Unit:        m^-1 * sqrt(kg * m^2 * s^-2 / kg) = s^-1
-    # Magnitude:   10^10 * sqrt(10^-23 / 10^-27)
-    #              = 10^12 s^-1 / [10^10 cm/s] = 100.0 cm^-1
-
-    m = (m1 * m2) / (m1 + m2)
-    c = sqrt((kcal2j/avg_cons) / amu) / lspeed * 100.0
-    v = c * a / (2.0*pi) * sqrt(2.0*D/m)
-
-    return v
-
-def cal_Morse_beta(D, v, m1, m2):
-
-    # Taking advantage the cal_Morse_v function
-    m = (m1 * m2) / (m1 + m2)
-    c = sqrt((kcal2j/avg_cons) / amu) / lspeed * 100.0
-    a = v  * (2.0*pi) / sqrt(2.0*D/m) / c
-
-    return a
+    p = polyfit(rl, enel, 2)
+    k = 2.0 * p[0]
+    eqr =  -p[1]/(2.0 * p[0])
+    return k, eqr
 
 ###############################################################################
 #                              Reading and Writing
