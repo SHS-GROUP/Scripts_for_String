@@ -26,7 +26,7 @@ dmass = 2.0135514936645316 # Unit: Dalton, From MathPCETwithET.m
 tmass = 3.0160492 # Unit: Dalton, From MathPCETwithET.m
 """
 # Set the lamada
-lamb = 17.7
+#lamb = 17.7
 
 # Constants
 amu = 1.660539040 #Unit: 10^-27 kg; atomic mass unit (Dalton), From https://en.wikipedia.org/wiki/Unified_atomic_mass_unit
@@ -123,7 +123,7 @@ def cal_Morse_Suv_trapz(coeff, u, v, xmass):
        wavefunctions"""
 
     #global omass, cmass
-    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el, lamb = coeff
 
     #The region to be integrated for x which is rCH-rOH
     xmin = -10.0
@@ -195,7 +195,7 @@ def cal_Morse_Suv_math(coeff, u, v, xmass):
     v = str(v)
 
     #global omass, cmass
-    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el, lamb = coeff
 
     if xmass < 2.0:
         a = popen('cal_sij_h.m %s %s %s %s %s %s %s %s %s | awk \'{print $2}\''
@@ -221,7 +221,7 @@ def cal_Morse_Suv(coeff, v1, v2, xmass):
        Lopez, Rivera, Smirnov, and Frank,
        International journal of quantum chemistry 2002, 88 (2), 280-295."""
 
-    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el, lamb = coeff
     R = R - req_ch - req_oh
 
     # lamada = sqrt(2.0 * m * D) / (beta * hbar)
@@ -286,7 +286,7 @@ def cal_Morse_alpha(coeff, v1, v2, xmass, stepsize):
     """Calculate the first derivative for the Morse wavefunctions overlap
        intergral distance dependence"""
 
-    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el, lamb = coeff
     coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
     coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
 
@@ -303,7 +303,7 @@ def cal_Morse_ab(coeff, v1, v2, xmass, stepsize):
     """Calculate the first and second derivatives for the overlap intergral
        distance dependence"""
 
-    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el = coeff
+    R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el, lamb = coeff
     coeff_m1 = [R - stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
     coeff_p1 = [R + stepsize, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
 
@@ -576,7 +576,7 @@ def norm_prob(ene_list, kb, T):
 def cal_kuv_R_HO(coeff, u, v, xmass, kb, T):
     """Calculate the kuv for R"""
 
-    R, freq1, req1, freq2, req2, dG0, V_el = coeff
+    R, freq1, req1, freq2, req2, dG0, V_el, lamb = coeff
     R = R - req1 - req2
 
     # Calculate the vibrational state energies for u and v
@@ -592,8 +592,6 @@ def cal_kuv_R_HO(coeff, u, v, xmass, kb, T):
     #      = (kcal/mol) / (J*s) = J / (J*s) = s^-1
     # Magnitude: (10^-23 / 10^-34) = 10^11 s^-1
 
-    global lamb
-
     #lamb = 13.4 #kcal/mol, re-oragnization energy
     c = (kcal2j / avg_cons) * (1.0 / hbar)
     Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
@@ -606,7 +604,7 @@ def cal_kuv_R_HO(coeff, u, v, xmass, kb, T):
 def cal_kR_HO(coeff, umax, vmax, xmass, kb, T):
     """Calculate the k for R, up to umax and vmax"""
 
-    R, freq1, req1, freq2, req2, dG0, V_el = coeff
+    R, freq1, req1, freq2, req2, dG0, V_el, lamb = coeff
 
     #Calculate the eigen energy states
     Eu_list = [cal_HO_ene2(freq1, u) for u in xrange(0, umax+1)]
@@ -655,7 +653,7 @@ def get_ks_HO(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, Qm1, 
 def cal_kuv_R_Morse(coeff, u, v, xmass, cmode, kb, T):
     """Calculate the kuv for R"""
 
-    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el, lamb = coeff
 
     # Calculate the vibrational state energies for u and v
     # and calculate the overlap integral Suv
@@ -675,7 +673,6 @@ def cal_kuv_R_Morse(coeff, u, v, xmass, cmode, kb, T):
     #      = (kcal/mol) / (J*s) = J / (J*s) = s^-1
     # Magnitude: (10^-23 / 10^-34) = 10^11 s^-1
 
-    global lamb
     #lamb = 13.4 #kcal/mol, re-oragnization energy
 
     c = (kcal2j / avg_cons) * (1.0 / hbar)
@@ -690,7 +687,7 @@ def cal_kR_Morse(coeff, umax, vmax, xmass, cmode, kb, T):
     """Calculate the k for R, up to umax and vmax"""
 
     #global cmass
-    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el = coeff
+    R, D_ch, beta_ch, req_ch, D_oh, beta_oh, req_oh, dG0, V_el, lamb = coeff
 
     #Calculate the eigen energy states
     if cmode == 'math':
@@ -743,7 +740,10 @@ def get_ks_Morse(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dm
 ## Fourier Grid Hamiltonian method with B-spline
 ##
 
-def cal_kR_bspline(R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
+def cal_kR_bspline(R, rdatf, outf, mass, kb, T, coeff, umax, vmax, npots):
+
+    # mass is in the unit of electron mass
+    Rt, dG0, lamb = coeff
 
     # Generate a potential plot for target R (Rt)
     Rpl = read_list(rdatf, 1)
@@ -768,13 +768,6 @@ def cal_kR_bspline(R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
         for i in xrange(0, 20):
             print('%5.2f %13.7f %13.7f' %(Rpl_new[i], P1_fit[i], P2_fit[i]), file=f)
 
-    # Perform the calculation with the fortran code and then read the output files
-    mass = 1822.8900409014022
-    if hydrogen.lower() == 'p':
-        mass = mass * 1.0072756064562605
-    elif hydrogen.lower() == 'd':
-        mass = mass * 2.0135514936645316
-
     smax = max([umax, vmax])
     system('/share/apps/bspline/bin/fgh_bspline.bin %s %d %10.5f %d > /dev/null ' %(datf, npots, mass, smax))
 
@@ -788,6 +781,9 @@ def cal_kR_bspline(R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
     prod_enef = outf + '_product_en.dat'
     Ev_list = read_2d_free_energy(prod_enef)
     Ev_list = Ev_list[0]
+
+    # Clean the file
+    system("rm %s_*.dat" %outf)
 
     #
     # Calculate the k at certain R
@@ -805,7 +801,6 @@ def cal_kR_bspline(R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
             Suv = overlap[u][v]
             #print(Suv)
 
-            global lamb
             #lamb = 13.4 #kcal/mol, re-oragnization energy
             c = (kcal2j / avg_cons) * (1.0 / hbar)
             Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
@@ -845,10 +840,12 @@ def cal_kR_bspline(R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
     #plt.close()
     """
 
-def get_ks_bspline(R_list, WR_list, kb, T, dG0, umax, vmax, npots, Qm1=1.0, print_per=0):
+def get_ks_bspline(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, npots, Qm1=1.0, print_per=0):
     #
     # Get the parition function parameter
     #
+
+    global emass
 
     cdft_file = '/home/pengfeil/Projs/SLO_QM/cdft-results-from-alexander/cdft-pt-profiles-RTS.dat'
 
@@ -858,8 +855,9 @@ def get_ks_bspline(R_list, WR_list, kb, T, dG0, umax, vmax, npots, Qm1=1.0, prin
     PR_list = norm_prob(WR_list, kb, T)
     for j in xrange(0, len(R_list)):
         R = R_list[j]
-        kR_h = cal_kR_bspline(2.6, cdft_file, R, '_temp_bspline', 'p', kb, T, dG0, umax, vmax, npots)
-        kR_d = cal_kR_bspline(2.6, cdft_file, R, '_temp_bspline', 'd', kb, T, dG0, umax, vmax, npots)
+        coeff = para_list[j]
+        kR_h = cal_kR_bspline(2.6, cdft_file, '_temp_bspline', hmass/emass, kb, T, coeff, umax, vmax, npots)
+        kR_d = cal_kR_bspline(2.6, cdft_file, '_temp_bspline', dmass/emass, kb, T, coeff, umax, vmax, npots)
                            # (R, rdatf, Rt, outf, hydrogen, kb, T, dG0, umax, vmax, npots):
         k_h_list.append(kR_h * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
         k_d_list.append(kR_d * PR_list[j] * 1.0/float(len(R_list)) * Qm1)
@@ -875,7 +873,7 @@ def get_ks_bspline(R_list, WR_list, kb, T, dG0, umax, vmax, npots, Qm1=1.0, prin
         for j in xrange(0, len(R_list)):
             print('%6.3f %5.2f %5.2f' %(R_list[j], 100.0 * k_h_list[j]/k_h, 100.0 * k_d_list[j]/k_d))
 
-    return k_h_list, k_d_list, k_h, k_d
+    return k_h, k_d
 
 ###############################################################################
 #                              Simple calculations
@@ -967,7 +965,7 @@ def read_para_file(fname):
 def write_file(fname, list1, list2, list3):
     w_file = open(fname, 'w')
     for i in xrange(len(list1)):
-        print("%7.3e %7.3e %7.3e" %(list1[i], list2[i], list3[i]), file=w_file)
+        print("%7.4e %7.4e %7.4e" %(list1[i], list2[i], list3[i]), file=w_file)
     w_file.close()
 
 

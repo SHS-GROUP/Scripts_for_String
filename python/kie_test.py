@@ -154,17 +154,18 @@ def test11():
     req_oh = 0.96
     dG0 = -5.4
     V_el = 4.5
+    lamb = 13.4
 
     beta1 = cal_Morse_beta(D1, freq1, 2.0*hmass, 2.0*hmass)
     beta2 = cal_Morse_beta(D2, freq2, 2.0*hmass, 2.0*hmass)
 
-    coeff = [R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff = [R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el, lamb]
 
     v1 = 0
     v2 = 0
 
-    hoverlap = cal_Suv(coeff, v1, v2, hmass)
-    doverlap = cal_Suv(coeff, v1, v2, dmass)
+    hoverlap = cal_Morse_Suv(coeff, v1, v2, hmass)
+    doverlap = cal_Morse_Suv(coeff, v1, v2, dmass)
     kie = hoverlap/doverlap
 
     print('Morse - Hoverlap, Doverlap, KIE:', hoverlap, doverlap, kie)
@@ -189,20 +190,20 @@ def test12():
     a = 2.068
     n = 0
 
-    energy = cal_morse_ene(D, m, a, n)
+    energy = cal_Morse_ene(D, m, a, n)
     print(energy)
 
     n = 1
-    energy = cal_morse_ene(D, m, a, n)
+    energy = cal_Morse_ene(D, m, a, n)
     print(energy)
 
     n = 0
     m = dmass
-    energy = cal_morse_ene(D, m, a, n)
+    energy = cal_Morse_ene(D, m, a, n)
     print(energy)
 
     n = 1
-    energy = cal_morse_ene(D, m, a, n)
+    energy = cal_Morse_ene(D, m, a, n)
     print(energy)
 
     # Results from MorseEnergy function in MathPCETwithET.m:
@@ -247,19 +248,20 @@ def test14():
     req_oh = 0.96
     dG0 = -5.4
     V_el = 4.5
+    lamb = 13.4
 
     #beta1 = cal_Morse_beta(D1, freq1, 2.0*hmass, 2.0*hmass)
     #beta2 = cal_Morse_beta(D2, freq2, 2.0*hmass, 2.0*hmass)
 
-    coeff = [R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff = [R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el, lamb]
 
     umax = 2
     vmax = 2
  
     T = 303.0
 
-    kR_h = cal_kR(coeff, umax, vmax, hmass, 'python', kb, T)
-    kR_d = cal_kR(coeff, umax, vmax, dmass, 'python', kb, T)
+    kR_h = cal_kR_Morse(coeff, umax, vmax, hmass, 'python', kb, T)
+    kR_d = cal_kR_Morse(coeff, umax, vmax, dmass, 'python', kb, T)
 
     print('Morse rate constants (H and D):', kR_h, kR_d)
 
@@ -281,19 +283,20 @@ def test15():
     req_oh = 0.96
     dG0 = -5.4
     V_el = 4.5
+    lamb = 13.4
 
     beta1 = cal_Morse_beta(D1, freq1, 2.0*hmass, 2.0*hmass)
     beta2 = cal_Morse_beta(D2, freq2, 2.0*hmass, 2.0*hmass)
 
-    coeff = [R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el]
+    coeff = [R, D1, beta1, req_ch, D2, beta2, req_oh, dG0, V_el, lamb]
 
     umax = 2
     vmax = 2
  
     T = 303.0
 
-    kR_h = cal_kR(coeff, umax, vmax, hmass, 'python', kb, T)
-    kR_d = cal_kR(coeff, umax, vmax, dmass, 'python', kb, T)
+    kR_h = cal_kR_Morse(coeff, umax, vmax, hmass, 'python', kb, T)
+    kR_d = cal_kR_Morse(coeff, umax, vmax, dmass, 'python', kb, T)
 
     print('Morse KIE:', kR_h/kR_d)
 
@@ -310,54 +313,64 @@ def test21():
     """Caculate rate constant using general potential under 303 K at 3.05 Angstrom"""
 
     T = 303.0
+
+    R = 3.05
     dG0 = -5.8
+    lamb = 13.4
+    coeff = [R, dG0, lamb]
+
     umax = 1
     vmax = 1
-    R = 3.05
     npots = 128
+    mass = hmass/emass
 
     cdft_file = '/home/pengfeil/Projs/SLO_QM/cdft-results-from-alexander/cdft-pt-profiles-RTS.dat'
 
-    kR = cal_kR_bspline(2.6, cdft_file, R, '_temp_bspline', 'p', kb, T, dG0, umax, vmax, npots)
-                     # (R, fsfx, Rt, outf, atom, kb, T, dG0, umax, vmax, npots):
+    kR = cal_kR_bspline(2.6, cdft_file, '_temp_bspline', mass, kb, T, coeff, umax, vmax, npots)
+
     print('General potential constant:', kR)
 
 def test22():
     """Calculate KIE using general potential under 303 K at 3.05 Angstrom"""
 
-    fname = 'str25+ex3.wt.R3_R1.txt.fit4'
-
-    R_list = read_list(fname, 1)
-    WR_list = read_list(fname, 2)
-    #R_list = [3.05]
-    #WR_list = [0.0]
+    #fname = 'str25+ex3.wt.R3_R1.txt.fit4'
 
     T = 303.0
-    dG0 = -5.8
+
+    #R_list = read_list(fname, 1)
+    #WR_list = read_list(fname, 2)
+
+    R_list = [3.05]
+    WR_list = [0.0]
+
+    dG0_list = [-5.8 for i in xrange(len(R_list))]
+    lamb_list = [13.4 for i in xrange(len(R_list))]
+    para_list = zip(R_list, dG0_list, lamb_list)
+
     umax = 2
     vmax = 2
     npots = 128
 
-    k_h_list, k_d_list, k_h, k_d = get_ks_bspline(R_list, WR_list, kb, T, dG0, umax, vmax, npots, Qm1=1.0, print_per=0)
-                                 # (R_list, WR_list, kb, T, dG0, umax, vmax, npots, Qm1=1.0, print_per=0)
+    k_h, k_d = get_ks_bspline(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, npots)
+
     #print(k_h_list)
     #print(k_d_list)
     print('General potential KIE:', k_h/k_d)
 
 # Tests about HO
 test1()  # KIE
-#test2()
-#test2a()
-#test3()
-#test4()
-#test4a()
+test2()
+test2a()
+test3()
+test4()
+test4a()
 
 # Tests about Morse
 test11()  #KIE
-#test12()
-#test13()
-#test14()  #Rate-Morse
-#test15()  #KIE-Morse
+test12()
+test13()
+test14()  #Rate-Morse
+test15()  #KIE-Morse
 
 # Tests about general potential
 test21()  #Rate-bspline
