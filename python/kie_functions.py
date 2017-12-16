@@ -10,6 +10,8 @@ from numpy import polyfit
 from scipy.integrate import quad
 from scipy.misc import comb
 from string_functions import read_list, read_2d_free_energy
+from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from matplotlib import pyplot as plt
 from numpy import polyfit, polyval, linspace
 
@@ -743,47 +745,92 @@ def get_ks_Morse(cmode, kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dm
 def cal_kR_bspline(R, rdatf, outf, mass, kb, T, coeff, umax, vmax, npots):
 
     # mass is in the unit of electron mass
-    Rt, dG0, lamb = coeff
+    Rt, dG0, V_el, lamb = coeff
 
     # Generate a potential plot for target R (Rt)
     Rpl = read_list(rdatf, 1)
-    P1l = read_list(rdatf, 4)
-    P2l = read_list(rdatf, 6)
+    P1l = read_list(rdatf, 2)
+    P2l = read_list(rdatf, 3)
+
+    #datf = outf + '_shift.dat' # The file used for data
+    #with open(datf, 'w') as f:
+    #    for i in xrange(0, len(P1l)):
+    #        print('%13.7f %13.7f %13.7f' %(Rpl[i], P1l[i], P2l[i]), file=f)
+
+    # Shift to zero potential
+    minP1l = min(P1l)
+    P1l = [i - minP1l for i in P1l]
+    minP2l = min(P2l)
+    P2l = [i - minP2l for i in P2l]
 
     Rpl1 = [(Rp - (Rt - R) / 2.0) for Rp in Rpl]
     Rpl2 = [(Rp + (Rt - R) / 2.0) for Rp in Rpl]
 
-    minval = min(Rpl1)
-    maxval = max(Rpl2)
-    Rpl_new = linspace(minval, maxval, 20)
+    Rpl1_min = Rpl1[P1l.index(min(P1l))]
+    Rpl2_min = Rpl2[P2l.index(min(P2l))]
 
-    pcoef1 = polyfit(Rpl1, P1l, 10)
-    pcoef2 = polyfit(Rpl2, P2l, 10)
+    if Rpl2_min >= Rpl1_min:
+        minval = Rpl1_min - 0.5
+        maxval = Rpl2_min + 0.5
+    else:
+        minval = Rpl2_min - 0.8
+        maxval = Rpl1_min + 0.8
 
-    P1_fit = [polyval(pcoef1, i) for i in Rpl_new]
-    P2_fit = [polyval(pcoef2, i) for i in Rpl_new]
+    #minval = min(Rpl1)
+    #maxval = max(Rpl2)
+
+    lin_points = 128
+    Rpl_new = linspace(minval, maxval, lin_points)
+
+    # Cubic spline
+    f1 = CubicSpline(Rpl1, P1l, extrapolate=True)
+    f2 = CubicSpline(Rpl2, P2l, extrapolate=True)
+
+    # Linear interpolation/extrapolation
+    #f1 = interp1d(Rpl1, P1l, kind='linear', fill_value='extrapolate')
+    #f2 = interp1d(Rpl2, P2l, kind='linear', fill_value='extrapolate')
+
+    P1_fit = [f1(i) for i in Rpl_new]
+    P2_fit = [f2(i) for i in Rpl_new]
+
+    # Polynomial fitting
+    #pcoef1 = polyfit(Rpl1, P1l, 5)
+    #pcoef2 = polyfit(Rpl2, P2l, 5)
+
+    #P1_fit = [polyval(pcoef1, i) for i in Rpl_new]
+    #P2_fit = [polyval(pcoef2, i) for i in Rpl_new]
+
+    au2kcal = 627.5095
 
     datf = outf + '.dat' # The file used for data
     with open(datf, 'w') as f:
-        for i in xrange(0, 20):
-            print('%5.2f %13.7f %13.7f' %(Rpl_new[i], P1_fit[i], P2_fit[i]), file=f)
+        for i in xrange(0, lin_points):
+            print('%13.7f %13.7f %13.7f' %(Rpl_new[i], P1_fit[i]/au2kcal, P2_fit[i]/au2kcal), file=f)
 
-    smax = max([umax, vmax])
-    system('/share/apps/bspline/bin/fgh_bspline.bin %s %d %10.5f %d > /dev/null ' %(datf, npots, mass, smax))
+    #mass = 1836.1526675 # Value from Alexander
+
+    smax = max([umax+1, vmax+1])
+    system('/share/apps/bspline/bin/fgh_bspline.bin %s %d %13.7f %d > /dev/null ' %(datf, npots, mass, smax))
 
     overlapf = outf + '_overlaps.dat'
     overlap = read_2d_free_energy(overlapf)
-    
+ 
+    print(overlap)
+
     reac_enef = outf + '_reactant_en.dat'
     Eu_list = read_2d_free_energy(reac_enef)
     Eu_list = Eu_list[0]
+
+    print(Eu_list)
 
     prod_enef = outf + '_product_en.dat'
     Ev_list = read_2d_free_energy(prod_enef)
     Ev_list = Ev_list[0]
 
+    print(Ev_list)
+
     # Clean the file
-    system("rm %s_*.dat" %outf)
+    #system("rm %s_*.dat" %outf)
 
     #
     # Calculate the k at certain R
@@ -792,16 +839,14 @@ def cal_kR_bspline(R, rdatf, outf, mass, kb, T, coeff, umax, vmax, npots):
     # Normalize the probabilities
     Pu = norm_prob(Eu_list, kb, T)
     k_R = 0.0
-    V_el = 4.5
 
-    for u in xrange(0, umax):
-        for v in xrange(0, vmax):
+    for u in xrange(0, umax+1):
+        for v in xrange(0, vmax+1):
             Eu = Eu_list[u]
             Ev = Ev_list[v]
             Suv = overlap[u][v]
             #print(Suv)
 
-            #lamb = 13.4 #kcal/mol, re-oragnization energy
             c = (kcal2j / avg_cons) * (1.0 / hbar)
             Prefac = c * (V_el**2 / hbar) * sqrt(pi/(lamb*kb*T)) #*10^11 s^-1
             dGuv = ((dG0+lamb+Ev-Eu)**2)/(4.0*lamb*kb*T) #unitless
@@ -847,7 +892,8 @@ def get_ks_bspline(kb, T, R_list, WR_list, para_list, umax, vmax, hmass, dmass, 
 
     global emass
 
-    cdft_file = '/home/pengfeil/Projs/SLO_QM/cdft-results-from-alexander/cdft-pt-profiles-RTS.dat'
+    #cdft_file = '/home/pengfeil/Projs/SLO_QM/cdft-results-from-alexander/cdft-pt-profiles-RTS.dat'
+    cdft_file = '/home/pengfeil/Projs/SLO_QM/cdft-results-from-alexander/cdft-pt-profiles-RTS-kcal_proton_profiles.dat'
 
     k_h_list = []
     k_d_list = []
