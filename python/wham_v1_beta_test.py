@@ -2,11 +2,12 @@
 # Filename: wham_v1-beta.py
 from __future__ import print_function
 from numpy import average, std, arange
-from numpy import array, matrix, exp, log, linspace, histogram, transpose, inf
+from numpy import (array, matrix, exp, log, linspace, histogram,
+                   transpose, inf, histogramdd)
 import matplotlib.pyplot as plt
 import time
 from string_functions import (window_data, get_color_dict, write_list,
-             write_xy_lists, read_dat_file, get_rc_data_1D, read_list)
+             write_xy_lists, read_dat_file, get_rc_data_1D, read_list, get_data_all)
 from random import seed, randint
 
 KbT = 0.596 #Energy unit, which is a global variable
@@ -566,6 +567,65 @@ def gene_free_ene_2D(data_dict, num_sims, dim, expFx, Ubiasl, rc_diml1, coefl1,
                          xlabel1, xlabel2, colmap, ini_crd, fin_crd, 0, 1)
         plot_free_ene_2D(num_binsX, num_binsY, xaxis_RC1, xaxis_RC2, Prob_RC12_2, figname,
                          xlabel1, xlabel2, colmap, ini_crd, fin_crd, avg)
+
+###############################################################################
+                       #The N dimension for final string
+###############################################################################
+
+def get_string_nD(data_dict, ini_image, fin_image):
+
+    crd = []
+    for i in xrange(ini_image, fin_image+1):
+        crd.append(data_dict[i].equ_dis)
+    crd = array(crd)
+
+    return crd
+
+def get_weights_all(data_dict, num_sims, expFx, Ubiasl):
+    """Calculate the weights for each point"""
+
+    weights = []
+
+    kk = 0
+    for i in xrange(0, num_sims): #Sum over big N for i
+        data_per_sim = len(data_dict[i+1].data)
+        for l in xrange(0, data_per_sim): #Sum over little n for l
+
+            # Get the biased potentials
+            Ubiasl_j = []
+            for j in xrange(num_sims):
+                Ubiasl_j.append(Ubiasl[kk])
+                kk = kk + 1
+
+            # Obtain the denominator
+            denom = 0.0
+            for k in xrange(num_sims):
+                data_per_sim2 = len(data_dict[k+1].data)
+                denom = denom + float(data_per_sim2) * Ubiasl_j[k] * expFx[k]
+
+            weight = 1.0/denom
+            weights.append(weight)
+
+    return weights
+
+def gene_free_energy_nD(data_dict, num_sims, string_seq, expFx, Ubiasl, binsize, figname):
+
+    global KbT
+
+    data_all = get_data_all(data_dict, num_sims)
+    fin_crd = get_string_nD(data_dict, string_seq[2], string_seq[3])
+    weights_all = get_weights_all(data_dict, num_sims, expFx, Ubiasl)
+
+    probs = []
+    for i in xrange(len(fin_crd)):
+        rangei = [[fin_crd[i][j]-binsize/2.0,fin_crd[i][j]+binsize/2.0] for j in xrange(len(fin_crd[i]))]
+        prob_i, edges_i = histogramdd(data_all, range=rangei, weights=weights_all, bins=1)
+        prob_i = prob_i.sum()
+        probs.append(prob_i)
+
+    n_points = len(fin_crd)
+    n_list = range(1, len(fin_crd)+1)
+    plot_free_ene_1D(n_points, probs, n_list, figname, 'Image Number')
 
 ###############################################################################
                               #The WHAM iteration
