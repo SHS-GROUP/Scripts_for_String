@@ -58,17 +58,25 @@ def write_list(fname, list_name, num_sims):
             print(' ', file=writef)
     writef.close()
 
-def write_xy_lists(fname, xlist, ylist):
+def write_xy_lists(fname, xlist, ylist, isint=0):
 
     if len(xlist) != len(ylist):
         raise ValueError('The length of xlist and ylist should be the same!')
 
-    writef = open(fname, 'w')
-    for i in xrange(len(xlist)):
-        j = xlist[i]
-        k = ylist[i]
-        print("%16.3f %16.3f" %(j, k), file=writef)
-    writef.close()
+    if isint == 0:
+        writef = open(fname, 'w')
+        for i in xrange(len(xlist)):
+            j = xlist[i]
+            k = ylist[i]
+            print("%16.3f %16.3f" %(j, k), file=writef)
+        writef.close()
+    else:
+        writef = open(fname, 'w')
+        for i in xrange(len(xlist)):
+            j = xlist[i]
+            k = ylist[i]
+            print("%16.3f %16d" %(j, k), file=writef)
+        writef.close()
 
 def read_dat_file(fname):
     readf = open(fname, 'r')
@@ -82,6 +90,16 @@ def read_dat_file(fname):
             dat_array.append(line)
     readf.close()
     return dat_array
+
+def get_data_all(data_dict, num_sims):
+
+    # Get all the sampling data
+    data_all = []
+    for i in xrange(1, num_sims+1):
+        #print(data_dict[i].data)
+        data_all = data_all + list(data_dict[i].data)
+    data_all = array(data_all)
+    return data_all
 
 def get_rc_data_1D(data_dict, num_sims, rc_diml, coefl, num_bins):
 
@@ -107,10 +125,29 @@ def get_rc_data_1D(data_dict, num_sims, rc_diml, coefl, num_bins):
         data_RCl.append(data_RC_per_sim)
 
     # Determine the plotting bin size
-    val_min = min(data_RC) - 0.00001
-    val_max = max(data_RC) + 0.00001
+    if isinstance(num_bins, int):
+        num_binsX = num_bins
+        val_min = min(data_RC) - 0.00001
+        val_max = max(data_RC) + 0.00001
+    elif isinstance(num_bins, list):
+        if len(num_bins) != 2:
+            raise ValueError("If num_bins is a list it should have two elements!")
+        elif False not in num_bins:
+            raise ValueError("If num_bins is a list it should have a value of \"False\"!")
+        elif num_bins[1] == False:
+            val_min = min(data_RC) - 0.00001
+            val_max = max(data_RC) + 0.00001
+            num_binsX = num_bins[0]
+        elif num_bins[0] == False:
+            binsize = num_bins[1]
+            val_min = (min(data_RC) // binsize) * binsize
+            val_max = (max(data_RC) // binsize + 1) * binsize
+            num_binsX = (val_max - val_min) / binsize
+        elif num_bins == [False, False]:
+            raise ValueError("If num_bins is a list, it can not be a list for both \"False\"!")
 
-    bins_RC = linspace(val_min, val_max, num_bins+1)
+    num_binsX = int(round(num_binsX, 0))
+    bins_RC = linspace(val_min, val_max, num_binsX+1)
     binsize_RC = bins_RC[1] - bins_RC[0]
     plot_bins_RC = bins_RC[0:-1]
     xaxis_RC = [i + binsize_RC/2.0 for i in plot_bins_RC]
@@ -131,7 +168,7 @@ def get_rc_data_1D(data_dict, num_sims, rc_diml, coefl, num_bins):
     plt.savefig(figname)
     plt.close()
 
-    return data_RC, bins_RC, xaxis_RC
+    return num_binsX, data_RC, bins_RC, xaxis_RC
 
 def cal_dis(crds, ati, atj):
     sq = 0.0
@@ -182,11 +219,52 @@ def get_bpairsl(fname):
 def read_list(fname, row):
     data_list = []
     r_file = open(fname, 'r')
+    ln  = 1
     for rline in r_file:
-        line = rline.strip('\n')
-        line = line.strip(' ')
-        line = line.split()
-        data_list.append(float(line[row-1]))
+        if rline[0] != '#':
+            line = rline.strip('\n')
+            line = line.strip(' ')
+            line = line.split()
+            try:
+                data_list.append(float(line[row-1]))
+            except:
+                raise ValueError('Line number %d of file %s met error.' %(ln, fname))
+        ln += 1
     r_file.close()
     return data_list
+
+def read_2d_free_energy(fname):
+    free_energy_2d = []
+    readf = open(fname, 'r')
+    for rline in readf:
+        rline = rline.strip('\n')
+        rline = rline.split()
+        rline = [float(i) for i in rline]
+        free_energy_2d.append(rline)
+    readf.close()
+    return free_energy_2d
+
+def write_2d_free_energy(fname, list_2d):
+    w_f = open(fname, 'w')
+    for i in xrange(len(list_2d)):
+        for j in xrange(len(list_2d[i])):
+            print(list_2d[i][j], end=' ', file=w_f)
+        print('', file=w_f)
+    w_f.close()
+
+def get_axis_limits(ax, scalex=0.0, scaley=0.05):
+    return ax.get_xlim()[0]+(ax.get_xlim()[1]-ax.get_xlim()[0])*scalex, ax.get_ylim()[0]+(ax.get_ylim()[1]-ax.get_ylim()[0])*scaley
+
+def scale(l1):
+    minl1 = min(l1)
+    l1 = [l1[i] - minl1 for i in xrange(len(l1))]
+    return l1
+
+def plot_1d(fname, clr, labl, scale=1):
+    xlist = read_list(fname, 1)
+    ylist = read_list(fname, 2)
+    if scale == 0:
+        ymin = min(ylist)
+        ylist = [i - ymin for i in ylist]
+    plt.plot(xlist, ylist, clr, label=labl)
 
